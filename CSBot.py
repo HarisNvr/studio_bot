@@ -7,34 +7,34 @@ from datetime import datetime
 import sqlite3
 
 
-#bot = telebot.TeleBot('6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE') #@CraftStudioBot
-bot = telebot.TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g') #@CraftStudioBotJr
+# bot = telebot.TeleBot('6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE') # @CraftStudioBot
+bot = telebot.TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g') # @CraftStudioBotJr
 
-tarot_debug_start = {} #Словарь для корректного удаления сообщения после Таро
+tarot_debug_start = {} # Словарь для корректного удаления сообщения после Таро
 
 # Словарь для хранения случайных карт для каждого пользователя
 user_random_cards = {}
 
-broadcast_admin_id = None #Админ, который сейчас бродкастит
-broadcast_message = None #Тело рассылаемого сообщения
+broadcast_admin_id = None  # Админ, который сейчас бродкастит
+broadcast_message = None  # Тело рассылаемого сообщения
 
-del_time = 0.8 #Задержка между сообщениями бота
+del_time = 0.8  # Задержка между сообщениями бота
 
 
-@bot.message_handler(commands=['start', 'help'])  #Запуск бота по комманде /start и вызов главного меню по /help
+@bot.message_handler(commands=['start', 'help'])  # Запуск бота по комманде /start и вызов главного меню по /help
 def start(message):
 
-    user = message.from_user.first_name  #Имя пользователя в базе SQL
-    chat_id = message.chat.id  #ID чата с пользователем в базе SQL
-    user_id = message.from_user.id  #ID пользователя в базе SQL
+    user = message.from_user.first_name  # Имя пользователя в базе SQL
+    chat_id = message.chat.id  # ID чата с пользователем в базе SQL
+    user_id = message.from_user.id  # ID пользователя в базе SQL
 
-    UsersBD = sqlite3.connect('UsersDB.sql')  #База данных SQL с ID и Именем пользователя
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
     cursor = UsersBD.cursor()
 
-    time_full = datetime.now().time() #Время сейчас
-    hour = str(time_full).split(':')[0] #Час сейчас в формате str
+    time_full = datetime.now().time()  # Время сейчас
+    hour = str(time_full).split(':')[0]  # Час сейчас в формате str
 
-    markup = types.InlineKeyboardMarkup() #Кнопки
+    markup = types.InlineKeyboardMarkup()  # Кнопки
     btn_socseti = types.InlineKeyboardButton(text= '#МыВСети \U0001F4F1', callback_data='socseti')
     btn_shop = types.InlineKeyboardButton(text= 'Наш магазин  \U0001F6CD', callback_data='shop')
     btn_studia = types.InlineKeyboardButton(text= 'О студии \U0001F393', callback_data='studia')
@@ -45,19 +45,19 @@ def start(message):
     markup.row(btn_viezd, btn_socseti)
     markup.row(btn_tarot, btn_clean)
 
-    admin_ids = [154395483, 1019826386]  #Проверка админов для вывода спец кнопки
+    admin_ids = [154395483, 1019826386]  # Проверка админов для вывода спец кнопки
     if chat_id in admin_ids:
         btn_admin = types.InlineKeyboardButton('\U0001F60E Кнопка администратора \U0001F60E', callback_data='admin')
         markup.row(btn_admin)
 
-    if message.text == '/start': #Обработка команды /start
+    if message.text == '/start': # Обработка команды /start
         cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id))  # Сохранение id сообщения от пользователя
         UsersBD.commit()
 
         cursor.execute('SELECT * FROM polzovately WHERE chat_id = ?', (chat_id,))
         row = cursor.fetchone()
 
-        if row is None: #Если имени пользователя нет в БД
+        if row is None: # Если имени пользователя нет в БД
             cursor.execute('INSERT INTO polzovately (chat_id, user_id, username) VALUES (?, ?, ?)', (chat_id, user_id, user))
         else:
             cursor.execute('UPDATE polzovately SET username = ? WHERE chat_id = ?', (user, chat_id))
@@ -1399,111 +1399,111 @@ def easter_eggs(message): #Пасхалки
 
 @bot.callback_query_handler(func=lambda callback: True) #Обработка функции callback
 def buttons(callback):
-    if callback.data == 'help': #Все кнопки "назад", которые возвращают в 1-й уровень меню из 2-го
+    if callback.data == 'help': # Все кнопки "назад", которые возвращают в 1-й уровень меню из 2-го
         bot.answer_callback_query(callback.id)
         start(callback.message)
-    elif callback.data == 'clean': #Очистка чата_вопрос
+    elif callback.data == 'clean': # Очистка чата_вопрос
         bot.answer_callback_query(callback.id)
         clean(callback.message)
-    elif callback.data == 'delete_message': #Очистка чата_действие
+    elif callback.data == 'delete_message': # Очистка чата_действие
         bot.answer_callback_query(callback.id)
         delete_message(callback.message)
-    elif callback.data == 'admin': #Админская кнопка
+    elif callback.data == 'admin': # Админская кнопка
         bot.answer_callback_query(callback.id)
         admin(callback.message)
-    elif callback.data == 'another_proportion': #Пропорции
+    elif callback.data == 'another_proportion': # Пропорции
         bot.answer_callback_query(callback.id)
         proportions(callback.message, 1)
-    elif callback.data == 'socseti': #Кнопка "Ссылки на наши профили в соц.сетях" в 1-м уровне меню
+    elif callback.data == 'socseti': # Кнопка "Ссылки на наши профили в соц.сетях" в 1-м уровне меню
         bot.answer_callback_query(callback.id)
         socseti(callback.message)
-    elif callback.data == 'tarot':
+    elif callback.data == 'tarot': # Таро
         bot.answer_callback_query(callback.id)
         tarot_start(callback.message)
-    elif callback.data == 'napravleniya': #Кнопка с выбором направлений из вклдаки "Подробнее о студии и направлениях"
+    elif callback.data == 'napravleniya': # Кнопка с выбором направлений из вклдаки "Подробнее о студии и направлениях"
         bot.answer_callback_query(callback.id)
         napravleniya(callback.message)
-    elif callback.data == 'napravleniya_2': #Кнопка с выбором направлений из вклдаки "Выездные мастер-классы"
+    elif callback.data == 'napravleniya_2': # Кнопка с выбором направлений из вклдаки "Выездные мастер-классы"
         bot.answer_callback_query(callback.id)
         napravleniya_2(callback.message)
-    elif callback.data == 'studia': #Кнопка "Подробнее о студии и направлениях" в 1-м уровне меню
+    elif callback.data == 'studia': # Кнопка "Подробнее о студии и направлениях" в 1-м уровне меню
         bot.answer_callback_query(callback.id)
         studia(callback.message)
-    elif callback.data == 'Smola': #Кнопка "Эпоксидная смола" в направлениях студии
+    elif callback.data == 'Smola': # Кнопка "Эпоксидная смола" в направлениях студии
         bot.answer_callback_query(callback.id)
         Smola(callback.message)
-    elif callback.data == 'Gips': #Кнопка "Гипс" в направлениях студии
+    elif callback.data == 'Gips': # Кнопка "Гипс" в направлениях студии
         bot.answer_callback_query(callback.id)
         Gips(callback.message)
-    elif callback.data == 'Gips_2': #Кнопка "Гипс" в направлениях выездных МК
+    elif callback.data == 'Gips_2': # Кнопка "Гипс" в направлениях выездных МК
         bot.answer_callback_query(callback.id)
         Gips_2(callback.message)
-    elif callback.data == 'Sketching': #Кнопка "Скетчинг" в направлениях студии
+    elif callback.data == 'Sketching': # Кнопка "Скетчинг" в направлениях студии
         bot.answer_callback_query(callback.id)
         Sketching(callback.message)
-    elif callback.data == 'TieDye': #Кнопка "Тай-Дай" в направлениях студии
+    elif callback.data == 'TieDye': # Кнопка "Тай-Дай" в направлениях студии
         bot.answer_callback_query(callback.id)
         TieDye(callback.message)
-    elif callback.data == 'TieDye_2': #Кнопка "Тай-Дай" в направлениях выездных МК
+    elif callback.data == 'TieDye_2': # Кнопка "Тай-Дай" в направлениях выездных МК
         bot.answer_callback_query(callback.id)
         TieDye_2(callback.message)
-    elif callback.data == 'CustomCloth': #Кнопка "Роспись одежды" в направлениях студии
+    elif callback.data == 'CustomCloth': # Кнопка "Роспись одежды" в направлениях студии
         bot.answer_callback_query(callback.id)
         CustomCloth(callback.message)
-    elif callback.data == 'Svechi': #Кнопка "Свечеварение" в направлениях студии
+    elif callback.data == 'Svechi': # Кнопка "Свечеварение" в направлениях студии
         bot.answer_callback_query(callback.id)
         Svechi(callback.message)
-    elif callback.data == 'Svechi_2': #Кнопка "Свечеварение" в направлениях выездных МК
+    elif callback.data == 'Svechi_2': # Кнопка "Свечеварение" в направлениях выездных МК
         bot.answer_callback_query(callback.id)
         Svechi_2(callback.message)
-    elif callback.data == 'shop': #Кнопка "Магазин" в 1-м уровне меню
+    elif callback.data == 'shop': # Кнопка "Магазин" в 1-м уровне меню
         bot.answer_callback_query(callback.id)
         shop(callback.message)
-    elif callback.data == 'catalog_main': #Кнопка "Каталог" во вкладке магазина
+    elif callback.data == 'catalog_main': # Кнопка "Каталог" во вкладке магазина
         bot.answer_callback_query(callback.id)
         catalog_main(callback.message)
-    elif callback.data == 'catalog_1': #Страница 1 в каталоге
+    elif callback.data == 'catalog_1': # Страница 1 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_1(callback.message)
-    elif callback.data == 'catalog_2': #Страница 2 в каталоге
+    elif callback.data == 'catalog_2': # Страница 2 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_2(callback.message)
-    elif callback.data == 'catalog_3': #Страница 3 в каталоге
+    elif callback.data == 'catalog_3': # Страница 3 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_3(callback.message)
-    elif callback.data == 'catalog_4': #Страница 4 в каталоге
+    elif callback.data == 'catalog_4': # Страница 4 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_4(callback.message)
-    elif callback.data == 'catalog_5': #Страница 5 в каталоге
+    elif callback.data == 'catalog_5': # Страница 5 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_5(callback.message)
-    elif callback.data == 'catalog_6': #Страница 6 в каталоге
+    elif callback.data == 'catalog_6': # Страница 6 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_6(callback.message)
-    elif callback.data == 'catalog_7': #Страница 7 в каталоге
+    elif callback.data == 'catalog_7': # Страница 7 в каталоге
         bot.answer_callback_query(callback.id)
         catalog_7(callback.message)
-    elif callback.data == 'oplata': #Кнопка "Оплата" в меню Магазина
+    elif callback.data == 'oplata': # Кнопка "Оплата" в меню Магазина
         bot.answer_callback_query(callback.id)
         oplata(callback.message)
-    elif callback.data == 'dostavka': #Кнопка "О доставке" в меню Магазина
+    elif callback.data == 'dostavka': # Кнопка "О доставке" в меню Магазина
         bot.answer_callback_query(callback.id)
         dostavka(callback.message)
-    elif callback.data == 'zakaz': #Кнопка "Как заказать" в меню Магазина
+    elif callback.data == 'zakaz': # Кнопка "Как заказать" в меню Магазина
         bot.answer_callback_query(callback.id)
         zakaz(callback.message)
-    elif callback.data == 'viezd': #Кнопка "Выездные мастер-классы" в 1-м уровне меню
+    elif callback.data == 'viezd': # Кнопка "Выездные мастер-классы" в 1-м уровне меню
         bot.answer_callback_query(callback.id)
         viezd(callback.message)
-    elif callback.data == "send_broadcast_photo": #Отправка рассылки фото после подтверждения
+    elif callback.data == "send_broadcast_photo": # Отправка рассылки фото после подтверждения
         bot.answer_callback_query(callback.id)
         send_broadcast_photo(callback.message)
-    elif callback.data == "send_broadcast_text": #Отправка рассылки текст после подтверждения
+    elif callback.data == "send_broadcast_text": # Отправка рассылки текст после подтверждения
         bot.answer_callback_query(callback.id)
         send_broadcast_text(callback.message)
-    elif callback.data == "cancel": #Отмена рассылки
+    elif callback.data == "cancel": # Отмена рассылки
         bot.answer_callback_query(callback.id)
         cancel_broadcast(callback.message)
 
 
-bot.infinity_polling() #Постоянная работа бота
+bot.infinity_polling() # Постоянная работа бота
