@@ -8,7 +8,7 @@ import sqlite3
 
 
 # bot = telebot.TeleBot('6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE') # @CraftStudioBot
-bot = telebot.TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g') # @CraftStudioBotJr
+bot = telebot.TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
 
 tarot_debug_start = {} # Словарь для корректного удаления сообщения после Таро
 
