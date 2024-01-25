@@ -35,12 +35,12 @@ def start(message):
     hour = str(time_full).split(':')[0]  # Час сейчас в формате str
 
     markup = types.InlineKeyboardMarkup()  # Кнопки
-    btn_socseti = types.InlineKeyboardButton(text= '#МыВСети \U0001F4F1', callback_data='socseti')
-    btn_shop = types.InlineKeyboardButton(text= 'Наш магазин  \U0001F6CD', callback_data='shop')
-    btn_studia = types.InlineKeyboardButton(text= 'О студии \U0001F393', callback_data='studia')
-    btn_viezd = types.InlineKeyboardButton(text= 'Выездные МК  \U0001F30D', callback_data='viezd')
-    btn_tarot = types.InlineKeyboardButton(text= 'Карты ТАРО \U00002728', callback_data='tarot')
-    btn_clean = types.InlineKeyboardButton(text= f'Очистить чат \U0001F9F9', callback_data='clean')
+    btn_socseti = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1', callback_data='socseti')
+    btn_shop = types.InlineKeyboardButton(text='Наш магазин  \U0001F6CD', callback_data='shop')
+    btn_studia = types.InlineKeyboardButton(text='О студии \U0001F393', callback_data='studia')
+    btn_viezd = types.InlineKeyboardButton(text='Выездные МК  \U0001F30D', callback_data='viezd')
+    btn_tarot = types.InlineKeyboardButton(text='Карты ТАРО \U00002728', callback_data='tarot')
+    btn_clean = types.InlineKeyboardButton(text=f'Очистить чат \U0001F9F9', callback_data='clean')
     markup.row(btn_studia, btn_shop)
     markup.row(btn_viezd, btn_socseti)
     markup.row(btn_tarot, btn_clean)
@@ -50,14 +50,14 @@ def start(message):
         btn_admin = types.InlineKeyboardButton('\U0001F60E Кнопка администратора \U0001F60E', callback_data='admin')
         markup.row(btn_admin)
 
-    if message.text == '/start': # Обработка команды /start
+    if message.text == '/start':  # Обработка команды /start
         cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id))  # Сохранение id сообщения от пользователя
         UsersBD.commit()
 
         cursor.execute('SELECT * FROM polzovately WHERE chat_id = ?', (chat_id,))
         row = cursor.fetchone()
 
-        if row is None: # Если имени пользователя нет в БД
+        if row is None:  # Если имени пользователя нет в БД
             cursor.execute('INSERT INTO polzovately (chat_id, user_id, username) VALUES (?, ?, ?)', (chat_id, user_id, user))
         else:
             cursor.execute('UPDATE polzovately SET username = ? WHERE chat_id = ?', (user, chat_id))
