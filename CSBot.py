@@ -31,9 +31,6 @@ def start(message):
     UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
     cursor = UsersBD.cursor()
 
-    time_full = datetime.now().time()  # Время сейчас
-    hour = str(time_full).split(':')[0]  # Час сейчас в формате str
-
     markup = types.InlineKeyboardMarkup()  # Кнопки
     btn_socseti = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1', callback_data='socseti')
     btn_shop = types.InlineKeyboardButton(text='Наш магазин  \U0001F6CD', callback_data='shop')
@@ -50,6 +47,8 @@ def start(message):
         btn_admin = types.InlineKeyboardButton('\U0001F60E Кнопка администратора \U0001F60E', callback_data='admin')
         markup.row(btn_admin)
 
+
+    hour = datetime.fromtimestamp(message.date).hour  # Час сейчас в формате int
     if message.text == '/start':  # Обработка команды /start
         cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id))  # Сохранение id сообщения от пользователя
         UsersBD.commit()
@@ -62,15 +61,15 @@ def start(message):
         else:
             cursor.execute('UPDATE polzovately SET username = ? WHERE chat_id = ?', (user, chat_id))
 
-        if int(hour) in range (6, 12):
+        if hour in range (6, 12):
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Доброе утро, <u>{message.from_user.first_name}!</u> \U0001F642'
                                           f'\nМеня зовут CraftStudioBot.</b>'
                                           f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
-        elif int(hour) in range (12, 18):
+        elif hour in range (12, 18):
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Добрый день, <u>{message.from_user.first_name}!</u> \U0001F642'
                                           f'\nМеня зовут CraftStudioBot.</b>'
                                           f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
-        elif int(hour) in range (18, 23):
+        elif hour in range (18, 23):
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Добрый вечер, <u>{message.from_user.first_name}!</u> \U0001F642'
                                           f'\nМеня зовут CraftStudioBot.</b>'
                                           f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
@@ -88,33 +87,33 @@ def start(message):
         time.sleep(del_time)
 
         lang = random.randint(1, 1000)
-        if lang == int(900):
+        if lang == 900:
             cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
             user_name = cursor.fetchone()[0]
             revers = ''.join(reversed(user_name))
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
                        (message.chat.id, bot.send_message(message.chat.id, f'<b>?ьчомоп мав угом я меч, <u>{revers}</u></b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == int(901):
+        elif lang == 901:
             cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
             user_name = cursor.fetchone()[0]
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
                        (message.chat.id, bot.send_message(message.chat.id, f'<b>नमस्ते <u>{user_name}</u>, मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == int(902):
+        elif lang == 902:
             cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
             user_name = cursor.fetchone()[0]
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
                        (message.chat.id, bot.send_message(message.chat.id, f'<b>Greetings <u>{user_name}</u>, how can I help you?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == int(903):
+        elif lang == 903:
             cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
             user_name = cursor.fetchone()[0]
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
                        (message.chat.id, bot.send_message(message.chat.id, f'<b>¡Hola! <u>{user_name}</u>, ¿le puedo ayudar en algo?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == int(904):
+        elif lang == 904:
             cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
             user_name = cursor.fetchone()[0]
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
                        (message.chat.id, bot.send_message(message.chat.id, f'<b>你好 <u>{user_name}</u>, 我怎么帮你？</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == int(999):
+        elif lang == 999:
             cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
             user_name = cursor.fetchone()[0]
             cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
