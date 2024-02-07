@@ -18,7 +18,7 @@ user_random_cards = {}
 broadcast_admin_id = None  # Админ, который сейчас бродкастит
 broadcast_message = None  # Тело рассылаемого сообщения
 
-del_time = 0.8  # Задержка между сообщениями бота
+del_time = 0.5  # Задержка между сообщениями бота
 
 
 @bot.message_handler(commands=['start', 'help'])  # Запуск бота по комманде /start и вызов главного меню по /help
@@ -83,7 +83,7 @@ def start(message):
         lang = random.randint(1, 1000)
 
         lang_greet_dict = {
-            900: f'<b>?ьчомоп мав угом я меч, <u>{user_name[::-1]}</u></b> \U0001F642',
+            900: f'<b>?ьчомоп мав угом я меч, <u>{user_name[::-1]}</u></b> \U0001F643',
             901: f'<b>नमस्ते <u>{user_name}</u>, मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642',
             902: f'<b>Greetings <u>{user_name}</u>, how can I help you?</b> \U0001F642',
             903: f'<b>¡Hola! <u>{user_name}</u>, ¿le puedo ayudar en algo?</b> \U0001F642',
@@ -1336,32 +1336,42 @@ def easter_eggs(message): #Пасхалки
     cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id)) #Сохранение id сообщения от пользователя
     UsersBD.commit()
 
-    if message.text.lower() =='акуна': #Пасхалка король лев_1
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, text='Матата!').message_id))
+    try:
+        if message.text.lower() == 'акуна':  # Пасхалка король лев_1
+            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+                           (message.chat.id, bot.send_message(message.chat.id,
+                                                              text='Матата!').message_id))
+        elif message.text.lower() == 'матата':  # Пасхалка король лев_2
+            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+                           (message.chat.id, bot.send_message(message.chat.id,
+                                                              text='Акуна!').message_id))
+        elif message.text.lower() == 'матата акуна':  # Пасхалка король лев_3
+            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+                           (message.chat.id, bot.send_message(message.chat.id,
+                                                              text='\U0001F417 \U0001F439').message_id))
+        elif message.text.lower() == 'акуна матата':  # Пасхалка король лев_4
+            img_akuna = open('Akuna.jpg', 'rb')
+            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+                           (message.chat.id,
+                            bot.send_photo(message.chat.id, img_akuna,
+                                           caption=f'<b>Акуна Матата!</b>',
+                                           parse_mode='html').message_id))
+            img_akuna.close()
+        elif message.text == '\U0001F346':  # Пасхалка бот_пик
+            img_bolt = open('bolt.png', 'rb')
+            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+                           (message.chat.id, bot.send_photo(message.chat.id,
+                                                            img_bolt).message_id))
+            img_bolt.close()
+        else:
+            chepuha(message)
         UsersBD.commit()
-    elif message.text.lower() =='матата': #Пасхалка король лев_2
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, text='Акуна!').message_id))
-        UsersBD.commit()
-    elif message.text.lower() == 'матата акуна': #Пасхалка король лев_3
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, text='\U0001F417 \U0001F439').message_id))
-        UsersBD.commit()
-    elif message.text.lower() =='акуна матата': #Пасхалка король лев_4
-        img_akuna = open('Akuna.jpg', 'rb')
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_photo(message.chat.id, img_akuna, caption=f'<b>Акуна Матата!</b>', parse_mode='html').message_id))
-        UsersBD.commit()
-        img_akuna.close()
-    elif message.text == '\U0001F346': #Пасхалка бот_пик
-        img_bolt = open('bolt.png', 'rb')
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_photo(message.chat.id, img_bolt).message_id))
-        UsersBD.commit()
-        img_bolt.close()
-    else:
-        chepuha(message)
+    except:
+        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (
+            message.chat.id, bot.send_message(message.chat.id,
+                                              f'<b>Извините, <u>{message.from_user.first_name}</u>! \U0001F642</b>'
+                                              f'\nЯ вас не понимаю, пожалуйста напишите /start',
+                                              parse_mode='html').message_id))
 
     cursor.close()
     UsersBD.close()
