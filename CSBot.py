@@ -30,6 +30,12 @@ def start(message):
 
     UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
     cursor = UsersBD.cursor()
+    try:
+        cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?",
+                       (chat_id,))
+        user_name = cursor.fetchone()[0]
+    except:
+        pass
 
     markup = types.InlineKeyboardMarkup()  # Кнопки
     btn_socseti = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1', callback_data='socseti')
@@ -47,8 +53,6 @@ def start(message):
         btn_admin = types.InlineKeyboardButton('\U0001F60E Кнопка администратора \U0001F60E', callback_data='admin')
         markup.row(btn_admin)
 
-
-    hour = datetime.fromtimestamp(message.date).hour  # Час сейчас в формате int
     if message.text == '/start':  # Обработка команды /start
         cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id))  # Сохранение id сообщения от пользователя
         UsersBD.commit()
@@ -61,24 +65,14 @@ def start(message):
         else:
             cursor.execute('UPDATE polzovately SET username = ? WHERE chat_id = ?', (user, chat_id))
 
-        if hour in range (6, 12):
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Доброе утро, <u>{message.from_user.first_name}!</u> \U0001F642'
+        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (
+        message.chat.id, bot.send_message(message.chat.id,
+                                          f'<b>Здравствуйте, <u>{message.from_user.first_name}</u>! \U0001F642'
                                           f'\nМеня зовут CraftStudioBot.</b>'
-                                          f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
-        elif hour in range (12, 18):
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Добрый день, <u>{message.from_user.first_name}!</u> \U0001F642'
-                                          f'\nМеня зовут CraftStudioBot.</b>'
-                                          f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
-        elif hour in range (18, 23):
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Добрый вечер, <u>{message.from_user.first_name}!</u> \U0001F642'
-                                          f'\nМеня зовут CraftStudioBot.</b>'
-                                          f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
-        else:
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Доброй ночи, <u>{message.from_user.first_name}!</u> \U0001F642'
-                                          f'\nМеня зовут CraftStudioBot.</b>'
-                                          f'\nЧем я могу вам помочь?', parse_mode='html', reply_markup=markup).message_id))
+                                          f'\nЧем я могу вам помочь?',
+                                          parse_mode='html',
+                                          reply_markup=markup).message_id))
     else:
-
         if tarot_debug_start.get(chat_id) == 1:
             del tarot_debug_start[chat_id]
         else:
@@ -87,42 +81,23 @@ def start(message):
         time.sleep(del_time)
 
         lang = random.randint(1, 1000)
-        if lang == 900:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            revers = ''.join(reversed(user_name))
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b>?ьчомоп мав угом я меч, <u>{revers}</u></b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == 901:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b>नमस्ते <u>{user_name}</u>, मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == 902:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b>Greetings <u>{user_name}</u>, how can I help you?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == 903:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b>¡Hola! <u>{user_name}</u>, ¿le puedo ayudar en algo?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == 904:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b>你好 <u>{user_name}</u>, 我怎么帮你？</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        elif lang == 999:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b>Γειά σας <u>{user_name}</u>, πώς μπορώ να σε βοηθήσω?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
-        else:
-            cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, bot.send_message(message.chat.id, f'<b><u>{user_name}</u>, чем я могу вам помочь?</b> \U0001F642', parse_mode='html' ,reply_markup=markup).message_id))
+
+        lang_greet_dict = {
+            900: f'<b>?ьчомоп мав угом я меч, <u>{user_name[::-1]}</u></b> \U0001F642',
+            901: f'<b>नमस्ते <u>{user_name}</u>, मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642',
+            902: f'<b>Greetings <u>{user_name}</u>, how can I help you?</b> \U0001F642',
+            903: f'<b>¡Hola! <u>{user_name}</u>, ¿le puedo ayudar en algo?</b> \U0001F642',
+            904: f'<b>你好 <u>{user_name}</u>, 我怎么帮你？</b> \U0001F642',
+            999: f'<b>Γειά σας <u>{user_name}</u>, πώς μπορώ να σε βοηθήσω?</b> \U0001F642',
+            'default': f'<b><u>{user_name}</u>, чем я могу вам помочь?</b> \U0001F642'
+        }
+
+        message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
+        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+                       (message.chat.id,
+                        bot.send_message(message.chat.id, message_text,
+                                         parse_mode='html',
+                                         reply_markup=markup).message_id))
 
     UsersBD.commit()
     cursor.close()
@@ -158,8 +133,6 @@ def delete_message(message):
     message_ids = cursor.fetchall()
     chat_id = message.chat.id
 
-    #clean_delete_debug_start[chat_id] = 1
-
     bot.delete_message(message.chat.id, message.id)
     sent_message = bot.send_message(message.chat.id, f"<b>Идёт очистка чата</b> \U0001F9F9", parse_mode = 'html')
 
@@ -177,8 +150,6 @@ def delete_message(message):
     UsersBD.close()
 
     bot.delete_message(sent_message.chat.id, sent_message.message_id)
-
-    #start(message)
 
 
 def admin(message): #Админское меню
