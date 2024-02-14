@@ -1,29 +1,31 @@
-import random
-import telebot
-from telebot import types
-import time
-import glob
+import sys
 from datetime import datetime
+import glob
 import sqlite3
+import telebot
+from telebot import types, TeleBot
+import time
+import random
 
 
-# bot = telebot.TeleBot('6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE') # @CraftStudioBot
-bot = telebot.TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
+if sys.platform == 'win32':
+    bot = TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
+else:
+    bot = TeleBot('6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE') # @CraftStudioBot
 
-tarot_debug_start = {} # Словарь для корректного удаления сообщения после Таро
-
-# Словарь для хранения случайных карт для каждого пользователя
-user_random_cards = {}
+bot.send_message(154395483, 'Бот запущен')  #  Дебаг сообщение
 
 broadcast_admin_id = None  # Админ, который сейчас бродкастит
 broadcast_message = None  # Тело рассылаемого сообщения
+broadcast_announce_1_id = None  #ID сообщения "Отправьте сообщение для рассылки"
+broadcast_announce_2_id = None  #ID сообщения, которое админ ввёл для бродкаста
+broadcast_announce_3_id = None  #ID сообщения "Разослать сообщение?"
 
 del_time = 0.5  # Задержка между сообщениями бота
 
 
 @bot.message_handler(commands=['start', 'help'])  # Запуск бота по комманде /start и вызов главного меню по /help
-def start(message):
-
+def start(message, debug=None):
     user = message.from_user.first_name  # Имя пользователя в базе SQL
     chat_id = message.chat.id  # ID чата с пользователем в базе SQL
     user_id = message.from_user.id  # ID пользователя в базе SQL
@@ -73,10 +75,10 @@ def start(message):
                                           parse_mode='html',
                                           reply_markup=markup).message_id))
     else:
-        if tarot_debug_start.get(chat_id) == 1:
-            del tarot_debug_start[chat_id]
-        else:
+        if debug == None:
             bot.delete_message(message.chat.id, message.id)
+        else:
+            pass
 
         time.sleep(del_time)
 
@@ -137,14 +139,15 @@ def delete_message(message):
     sent_message = bot.send_message(message.chat.id, f"<b>Идёт очистка чата</b> \U0001F9F9", parse_mode = 'html')
 
     for message_id in message_ids:
+        cursor.execute(
+            'DELETE FROM message_ids WHERE chat_id = ? AND message_id = ?',
+            (message.chat.id, message_id[0]))
+        UsersBD.commit()
         try:
             bot.delete_message(message.chat.id, message_id[0])
-            cursor.execute('DELETE FROM message_ids WHERE chat_id = ? AND message_id = ?', (message.chat.id, message_id[0]))
-            UsersBD.commit()
             time.sleep(0.05)
-        except Exception:
-            cursor.execute('DELETE FROM message_ids WHERE chat_id = ? AND message_id = ?', (message.chat.id, message_id[0]))
-            UsersBD.commit()
+        except:
+            pass
 
     cursor.close()
     UsersBD.close()
@@ -175,7 +178,7 @@ def admin(message): #Админское меню
 
 #Начало админских комманд
 @bot.message_handler(commands=['proportions'])
-def proportions(message, debug = None):
+def proportions(message, debug=None):
     UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
     cursor = UsersBD.cursor()
 
@@ -274,11 +277,17 @@ def start_broadcast(message):
     global broadcast_announce_1_id
     global broadcast_admin_id
 
+    markup = types.InlineKeyboardMarkup()
+    btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
+                                                      callback_data='cancel')
+    markup.add(btn_cancel_broadcast)
+
     if message.from_user.id in [154395483, 1019826386] and broadcast_admin_id is None:
         broadcast_admin_id = message.from_user.id
-        broadcast_announce_1 = bot.send_message(message.chat.id, "Отправьте сообщение для рассылки")
-        broadcast_announce_1_id = broadcast_announce_1.message_id
         bot.delete_message(message.chat.id, message.id)
+        time.sleep(del_time)
+        broadcast_announce_1 = bot.send_message(message.chat.id, "Отправьте сообщение для рассылки", reply_markup=markup)
+        broadcast_announce_1_id = broadcast_announce_1.message_id
     elif message.from_user.id in [154395483, 1019826386] and broadcast_admin_id is not None:
         new_message_id = str(bot.send_message(message.chat.id, "Сейчас идёт рассылка другого администратора").message_id)
         cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
@@ -323,7 +332,8 @@ def send_broadcast_photo(message):
     global broadcast_announce_1_id
     global broadcast_announce_2_id
     global broadcast_announce_3_id
-    n = 0
+
+    send_count = 0
 
     chat_id_sql = sqlite3.connect('UsersDB.sql')
     cursor = chat_id_sql.cursor()
@@ -338,9 +348,9 @@ def send_broadcast_photo(message):
     broadcast_announce_2_id = None
     broadcast_announce_3_id = None
 
-    today = str(datetime.now())
-    today_new = today.split('.')[0]
+    today = (str(datetime.now())).split('.')[0]
 
+    time.sleep(1)
     sent_message = bot.send_message(message.chat.id, text='Рассылка начата')
 
     for chat_id in chat_ids:
@@ -349,20 +359,20 @@ def send_broadcast_photo(message):
         else:
             try:
                 bot.send_photo(chat_id[0], broadcast_message.photo[-1].file_id, caption=broadcast_message.caption)
-                n += 1
+                send_count += 1
                 time.sleep(3)
-            except Exception:
+            except:
                 pass
 
     bot.delete_message(sent_message.chat.id, sent_message.message_id)
 
-    if str(n)[-1] in ['2', '3', '4'] and str(n) not in ['12', '13', '14']:
-        bot.send_message(message.chat.id, text=f'Рассылка от {today_new} закончена, {n} пользователя её получили')
-    elif str(n)[-1] == '1' and str(n) not in ['11']:
-        bot.send_message(message.chat.id, text=f'Рассылка от {today_new} закончена, {n} пользователь её получил')
+    time.sleep(1)
+    if str(send_count)[-1] in ['2', '3', '4'] and str(send_count) not in ['12', '13', '14']:
+        bot.send_message(message.chat.id, text=f'Рассылка от {today} закончена, {send_count} пользователя её получили')
+    elif str(send_count)[-1] == '1' and str(send_count) not in ['11']:
+        bot.send_message(message.chat.id, text=f'Рассылка от {today} закончена, {send_count} пользователь её получил')
     else:
-        bot.send_message(message.chat.id, text=f'Рассылка от {today_new} закончена, {n} пользователей её получили')
-
+        bot.send_message(message.chat.id, text=f'Рассылка от {today} закончена, {send_count} пользователей её получили')
     bot.send_photo(message.chat.id, broadcast_message.photo[-1].file_id, caption=broadcast_message.caption)
 
     chat_id_sql.commit()
@@ -404,7 +414,8 @@ def send_broadcast_text(message):
     global broadcast_announce_1_id
     global broadcast_announce_2_id
     global broadcast_announce_3_id
-    n = 0
+
+    send_count = 0
 
     chat_id_sql = sqlite3.connect('UsersDB.sql')
     cursor = chat_id_sql.cursor()
@@ -419,9 +430,9 @@ def send_broadcast_text(message):
     broadcast_announce_2_id = None
     broadcast_announce_3_id = None
 
-    today = str(datetime.now())
-    today_new = today.split('.')[0]
+    today = (str(datetime.now())).split('.')[0]
 
+    time.sleep(1)
     sent_message = bot.send_message(message.chat.id, text='Рассылка начата')
 
     for chat_id in chat_ids:
@@ -430,19 +441,20 @@ def send_broadcast_text(message):
         else:
             try:
                 bot.send_message(chat_id[0], broadcast_message.text)
-                n += 1
-                time.sleep(3)
-            except Exception:
+                send_count += 1
+                time.sleep(0.1)
+            except:
                 pass
 
     bot.delete_message(sent_message.chat.id, sent_message.message_id)
 
-    if str(n)[-1] in ['2', '3', '4'] and str(n) not in ['12', '13', '14']:
-        bot.send_message(message.chat.id, text=f'Рассылка от {today_new} закончена, {n} пользователя её получили')
-    elif str(n)[-1] == '1' and str(n) not in ['11']:
-        bot.send_message(message.chat.id, text=f'Рассылка от {today_new} закончена, {n} пользователь её получил')
+    time.sleep(1)
+    if str(send_count)[-1] in ['2', '3', '4'] and str(send_count) not in ['12', '13', '14']:
+        bot.send_message(message.chat.id, text=f'Рассылка от {today} закончена, {send_count} пользователя её получили')
+    elif str(send_count)[-1] == '1' and str(send_count) not in ['11']:
+        bot.send_message(message.chat.id, text=f'Рассылка от {today} закончена, {send_count} пользователь её получил')
     else:
-        bot.send_message(message.chat.id, text=f'Рассылка от {today_new} закончена, {n} пользователей её получили')
+        bot.send_message(message.chat.id, text=f'Рассылка от {today} закончена, {send_count} пользователей её получили')
 
     bot.send_message(message.chat.id, broadcast_message.text)
 
@@ -462,16 +474,19 @@ def cancel_broadcast(message):
     global broadcast_announce_3_id
 
     bot.delete_message(message.chat.id, broadcast_announce_1_id)
-    bot.delete_message(message.chat.id, broadcast_announce_2_id)
-    bot.delete_message(message.chat.id, broadcast_announce_3_id)
+    broadcast_announce_1_id = None
+
+    if (broadcast_announce_2_id and broadcast_announce_3_id) is not None:
+        bot.delete_message(message.chat.id, broadcast_announce_2_id)
+        broadcast_announce_2_id = None
+        bot.delete_message(message.chat.id, broadcast_announce_3_id)
+        broadcast_announce_3_id = None
+
+        broadcast_message = None
 
     broadcast_admin_id = None
-    broadcast_message = None
 
-    broadcast_announce_1_id = None
-    broadcast_announce_2_id = None
-    broadcast_announce_3_id = None
-
+    time.sleep(1)
     sent_message = bot.send_message(message.chat.id, text='Рассылка отменена')
     time.sleep(5)
     bot.delete_message(sent_message.chat.id, sent_message.message_id)
@@ -480,7 +495,6 @@ def cancel_broadcast(message):
 
 
 def tarot_start(message): #Проверка условий для Таро
-
     chat_id = message.chat.id
     today = datetime.now().date()
     UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
@@ -492,10 +506,9 @@ def tarot_start(message): #Проверка условий для Таро
 
     if chat_id in admin_ids:
         bot.delete_message(message.chat.id, message.id)
-        tarot_debug_start[chat_id] = 1
-        time.sleep(0.5)
+        time.sleep(del_time)
         get_random_tarot_cards(message)
-        start(message)
+        start(message, 1)
     else:
         if last_tarrot_date is None or last_tarrot_date == '':
             last_tarrot_date = today
@@ -503,10 +516,9 @@ def tarot_start(message): #Проверка условий для Таро
                            (last_tarrot_date.strftime("%Y-%m-%d"), chat_id))
             UsersBD.commit()
             bot.delete_message(message.chat.id, message.id)
-            tarot_debug_start[chat_id] = 1
-            time.sleep(0.5)
+            time.sleep(del_time)
             get_random_tarot_cards(message)
-            start(message)
+            start(message, 1)
         else:
             last_tarrot_date = datetime.strptime(last_tarrot_date, "%Y-%m-%d")
             if last_tarrot_date.date() == today:
@@ -520,19 +532,18 @@ def tarot_start(message): #Проверка условий для Таро
                 cursor.execute("UPDATE polzovately SET last_tarrot_date = ? WHERE chat_id = ?", (today, chat_id))
                 UsersBD.commit()
                 bot.delete_message(message.chat.id, message.id)
-                tarot_debug_start[chat_id] = 1
-                time.sleep(0.5)
+                time.sleep(del_time)
                 get_random_tarot_cards(message)
-                start(message)
+                start(message, 1)
 
     cursor.close()
     UsersBD.close()
 
 def get_random_tarot_cards(message):
-    OS_type = 1 # 1 = Windows, else = Ubuntu
-    tarot_delay = 2.5 # Задержка между картами Таро
+    OS_type = sys.platform
+    tarot_delay = 1.5 # Задержка между картами Таро
 
-    if OS_type == 1:
+    if OS_type == 'win32':
         path = 'C:/Users/wwwha/PycharmProjects/CraftStudioBot/Tarot'
         cards = glob.glob(f'{path}/*.jpg')
     else:
@@ -543,7 +554,7 @@ def get_random_tarot_cards(message):
     UsersBD = sqlite3.connect('UsersDB.sql')
     cursor = UsersBD.cursor()
 
-    user_random_cards[user_id] = []
+    user_random_cards = []
 
     cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, '<b>Расклад Таро - это всего лишь инструмент для ознакомления и развлечения. Расклад карт Таро не является истиной и не должен использоваться для принятия важных решений.</b>'
                           '\n'
@@ -552,32 +563,32 @@ def get_random_tarot_cards(message):
     UsersBD.commit()
     time.sleep(tarot_delay)
 
-    if OS_type == 1:
-        while len(user_random_cards[user_id]) < 3:
+    if OS_type == 'win32':
+        while len(user_random_cards) < 3:
             card = random.choice(cards)
             card_num = int(card.split('\\')[-1].split('.')[0])
 
-            if card_num not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards[user_id]]:
-                if card_num % 2 == 1 and card_num + 1 not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards[user_id]]:
-                    user_random_cards[user_id].append(card)
-                elif card_num % 2 == 0 and card_num - 1 not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards[user_id]]:
-                    user_random_cards[user_id].append(card)
+            if card_num not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards]:
+                if card_num % 2 == 1 and card_num + 1 not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards]:
+                    user_random_cards.append(card)
+                elif card_num % 2 == 0 and card_num - 1 not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards]:
+                    user_random_cards.append(card)
     else:
-        while len(user_random_cards[user_id]) < 3:
+        while len(user_random_cards) < 3:
             card = random.choice(cards)
             card_num = int(card.split('/')[-1].split('.')[0])
 
-            if card_num not in [int(c.split('/')[-1].split('.')[0]) for c in user_random_cards[user_id]]:
+            if card_num not in [int(c.split('/')[-1].split('.')[0]) for c in user_random_cards]:
                 if card_num % 2 == 1 and card_num + 1 not in [int(c.split('/')[-1].split('.')[0]) for c in
-                                                              user_random_cards[user_id]]:
-                    user_random_cards[user_id].append(card)
+                                                              user_random_cards]:
+                    user_random_cards.append(card)
                 elif card_num % 2 == 0 and card_num - 1 not in [int(c.split('/')[-1].split('.')[0]) for c in
-                                                                user_random_cards[user_id]]:
-                    user_random_cards[user_id].append(card)
+                                                                user_random_cards]:
+                    user_random_cards.append(card)
 
     captions = ['Прошлое', 'Настоящее', 'Будущее']
 
-    for card, caption in zip(user_random_cards[user_id], captions):
+    for card, caption in zip(user_random_cards, captions):
         with open(card, 'rb') as photo:
             with open(f'{card[:-4]}.txt', 'r', encoding='utf-8') as text:
                 description = text.read()
