@@ -11,148 +11,204 @@ bot = telebot.TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @Craf
 
 del_time = 0.5  # Задержка между сообщениями бота
 
-broadcast_admin_id = None  # Админ, который сейчас бродкастит
-broadcast_message = None  # Тело рассылаемого сообщения
-broadcast_func_messages_ids = [] #Словарь системных сообщений группы функций broadcast
-
-@bot.message_handler(commands=['broadcast'])
-def start_broadcast(message):
-    global broadcast_admin_id
-
-    UsersBD = sqlite3.connect('UsersDB.sql')
+def catalog_main(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
     cursor = UsersBD.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
-                                                      callback_data='cancel')
-    markup.add(btn_cancel_broadcast)
-
-    if message.from_user.id in [154395483, 1019826386] and broadcast_admin_id is None:
-        broadcast_admin_id = message.from_user.id
-        bot.delete_message(message.chat.id, message.id)
-        time.sleep(del_time)
-        broadcast_func_messages_ids.append((bot.send_message(message.chat.id, "Отправьте сообщение для рассылки", reply_markup=markup)).message_id)
-        bot.register_next_step_handler(message, confirm_broadcast)
-    elif message.from_user.id in [154395483, 1019826386] and broadcast_admin_id is not None:
-        new_message_id = str(bot.send_message(message.chat.id, "Сейчас идёт рассылка другого администратора").message_id)
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                       (message.chat.id, new_message_id))
-    else:
-        chepuha(message)
+    btn_catalog_str1 = types.InlineKeyboardButton('1', callback_data='catalog_1')
+    btn_catalog_str2 = types.InlineKeyboardButton('2', callback_data='catalog_2')
+    btn_catalog_str3 = types.InlineKeyboardButton('3', callback_data='catalog_3')
+    btn_catalog_str4 = types.InlineKeyboardButton('4', callback_data='catalog_4')
+    btn_catalog_str5 = types.InlineKeyboardButton('5', callback_data='catalog_5')
+    btn_catalog_str6 = types.InlineKeyboardButton('6', callback_data='catalog_6')
+    btn_catalog_str7 = types.InlineKeyboardButton('7', callback_data='catalog_7')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_catalog_str1,btn_catalog_str2,btn_catalog_str3)
+    markup.row(btn_catalog_str4,btn_catalog_str5,btn_catalog_str6)
+    markup.row(btn_catalog_str7, btn_catalog_exit)
+    markup.row(btn_vopros)
+    bot.delete_message(message.chat.id, message.id)
+    time.sleep(del_time)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, '<b>Пожалуйста, выберите страницу каталога, которая вас интересует:</b>', parse_mode='html', reply_markup=markup).message_id))
 
     UsersBD.commit()
     cursor.close()
     UsersBD.close()
 
 
-def confirm_broadcast(message):
-    global broadcast_message
-
-    if broadcast_admin_id is not None:
-        UsersBD = sqlite3.connect('UsersDB.sql')
-        cursor = UsersBD.cursor()
-
-        broadcast_message = message
-        broadcast_func_messages_ids.append(broadcast_message.id)
-
-        markup = types.InlineKeyboardMarkup()
-        btn_send_broadcast = types.InlineKeyboardButton('Разослать',
-                                                        callback_data='send_broadcast')
-        btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
-                                                          callback_data='cancel')
-        markup.add(btn_send_broadcast, btn_cancel_broadcast)
-
-        broadcast_func_messages_ids.append((bot.send_message(message.chat.id, 'Разослать сообщение?',
-                                                             reply_markup=markup)).id)
-
-        UsersBD.commit()
-        cursor.close()
-        UsersBD.close()
-
-@bot.callback_query_handler(func=lambda call: call.data == "send_broadcast")
-def send_broadcast(call):
-    global broadcast_message
-    global broadcast_admin_id
-    global broadcast_func_messages_ids
-
-    bot.answer_callback_query(call.id)
-
-    UsersBD = sqlite3.connect('UsersDB.sql')
+def catalog_1(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
     cursor = UsersBD.cursor()
-    cursor.execute("SELECT chat_id FROM polzovately")
-    chat_ids = cursor.fetchall()
+
+    markup = types.InlineKeyboardMarkup()
+    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_2')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_sled)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_1_img = open('cat_1.png','rb')
+    bot.delete_message(message.chat.id, message.id)
+    time.sleep(del_time)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_1_img, caption=f'<b>Страница №1</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_1_img.close()
+
+    UsersBD.commit()
     cursor.close()
     UsersBD.close()
 
-    for func_message_id in broadcast_func_messages_ids:
-        time.sleep(0.2)
-        bot.delete_message(call.message.chat.id, func_message_id)
-    broadcast_func_messages_ids = []
 
+def catalog_2(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
+    cursor = UsersBD.cursor()
+
+    markup = types.InlineKeyboardMarkup()
+    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_3')
+    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_1')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_pred,btn_sled)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_2_img = open('cat_2.png','rb')
+    bot.delete_message(message.chat.id, message.id)
     time.sleep(del_time)
-    sent_message = bot.send_message(call.message.chat.id, text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>', parse_mode='html')
-    start_time = datetime.now().strftime("%d-%m-%Y %H:%M").split('.')[0]
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_2_img, caption=f'<b>Страница №2</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_2_img.close()
+
+    UsersBD.commit()
+    cursor.close()
+    UsersBD.close()
 
 
-    if broadcast_message.content_type == 'photo':
-        content_function = bot.send_photo
-        content_args = {'caption': broadcast_message.caption}
-        content_value = broadcast_message.photo[-1].file_id
-    elif broadcast_message.content_type == 'text':
-        content_function = bot.send_message
-        content_args = {}
-        content_value = broadcast_message.text
+def catalog_3(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
+    cursor = UsersBD.cursor()
 
-    send_count = 0
-    for chat_id in chat_ids:
-        if str(chat_id[0]) != str(broadcast_admin_id):
-            try:
-                content_function(chat_id[0], content_value, **content_args)
-                send_count += 1
-                time.sleep(0.1)
-            except:
-                pass
-
-    bot.delete_message(call.message.chat.id, sent_message.id)
+    markup = types.InlineKeyboardMarkup()
+    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_4')
+    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_2')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_pred,btn_sled)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_3_img = open('cat_3.png','rb')
+    bot.delete_message(message.chat.id, message.id)
     time.sleep(del_time)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_3_img, caption=f'<b>Страница №3</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_3_img.close()
 
-    if str(send_count)[-1] in ['2', '3', '4'] and str(send_count) not in ['12', '13', '14']:
-        users_get = 'пользователя получили'
-    elif str(send_count)[-1] == '1' and str(send_count) not in ['11']:
-        users_get = 'пользователь получил'
-    else:
-        users_get = 'пользователей получили'
-    broadcast_success = f'<b>{send_count}</b> {users_get} рассылку от:\n\n\U0001F4C7 {start_time.split()[0]}\n\n\U0000231A {start_time.split()[1]}'
+    UsersBD.commit()
+    cursor.close()
+    UsersBD.close()
 
-    bot.send_message(call.message.chat.id, f'{broadcast_success}'
-                                           f'\n'
-                                           f'\n\U00002B07 <b>Содержание</b> \U00002B07', parse_mode='html')
+
+def catalog_4(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
+    cursor = UsersBD.cursor()
+
+    markup = types.InlineKeyboardMarkup()
+    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_5')
+    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_3')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_pred,btn_sled)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_4_img = open('cat_4.png','rb')
+    bot.delete_message(message.chat.id, message.id)
     time.sleep(del_time)
-    content_function(call.message.chat.id, content_value, **content_args)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_4_img, caption=f'<b>Страница №4</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_4_img.close()
 
-    broadcast_admin_id = None
-    broadcast_message = None
+    UsersBD.commit()
+    cursor.close()
+    UsersBD.close()
 
-@bot.callback_query_handler(func=lambda call: call.data == 'cancel')
-def cancel_broadcast(call):
-    global broadcast_message
-    global broadcast_admin_id
-    global broadcast_func_messages_ids
 
-    bot.answer_callback_query(call.id)
+def catalog_5(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
+    cursor = UsersBD.cursor()
 
-    for func_message_id in broadcast_func_messages_ids:
-        time.sleep(0.2)
-        bot.delete_message(call.message.chat.id, func_message_id)
-
-    broadcast_admin_id = None
-    broadcast_message = None
-    broadcast_func_messages_ids = []
-
+    markup = types.InlineKeyboardMarkup()
+    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_6')
+    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_4')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_pred,btn_sled)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_5_img = open('cat_5.png','rb')
+    bot.delete_message(message.chat.id, message.id)
     time.sleep(del_time)
-    sent_message = bot.send_message(call.message.chat.id, text='Рассылка отменена')
-    time.sleep(2)
-    bot.delete_message(call.message.chat.id, sent_message.id)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_5_img, caption=f'<b>Страница №5</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_5_img.close()
+
+    UsersBD.commit()
+    cursor.close()
+    UsersBD.close()
+
+
+def catalog_6(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
+    cursor = UsersBD.cursor()
+
+    markup = types.InlineKeyboardMarkup()
+    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_7')
+    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_5')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_pred, btn_sled)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_6_img = open('cat_6.png','rb')
+    bot.delete_message(message.chat.id, message.id)
+    time.sleep(del_time)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_6_img, caption=f'<b>Страница №6</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_6_img.close()
+
+    UsersBD.commit()
+    cursor.close()
+    UsersBD.close()
+
+
+def catalog_7(message):
+    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
+    cursor = UsersBD.cursor()
+
+    markup = types.InlineKeyboardMarkup()
+    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_6')
+    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
+    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
+    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
+    markup.row(btn_pred)
+    markup.row(btn_catalog_main)
+    markup.row(btn_vopros)
+    markup.row(btn_catalog_exit)
+    cat_7_img = open('cat_7.png','rb')
+    bot.delete_message(message.chat.id, message.id)
+    time.sleep(del_time)
+    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_7_img, caption=f'<b>Страница №7</b>', parse_mode = 'html', reply_markup=markup).message_id))
+    cat_7_img.close()
+
+    UsersBD.commit()
+    cursor.close()
+    UsersBD.close()
 
 
 
