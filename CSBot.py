@@ -1,1404 +1,1761 @@
-import sys
-from datetime import datetime
 import glob
-import sqlite3
-import telebot
-from telebot import types, TeleBot
-import time
 import random
+import sqlite3
+import sys
+import time
+from datetime import datetime, timedelta
 
+from telebot import types, TeleBot
+from telebot.apihelper import ApiTelegramException
 
 if sys.platform == 'win32':
-    bot = TeleBot('6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
+    Bot = TeleBot(
+        '6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
 else:
-    bot = TeleBot('6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE') # @CraftStudioBot
+    Bot = TeleBot(
+        '6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE')  # @CraftStudioBot
 
-bot.send_message(154395483, f'Бот активирован \U0001F916')  #  Дебаг сообщение
+BROADCAST_ADMIN_ID = None
+BROADCAST_MESSAGE = None
+BROADCAST_FUNC_MESSAGES_IDS = []
+ADMIN_IDS = [154395483, 1019826386]
+# [Я (HarisNvrsk), Лена] (154395483 - HarisNvr)
+DEL_TIME = 0.5  # Задержка между сообщениями бота
 
-broadcast_admin_id = None  # Админ, который сейчас бродкастит
-broadcast_message = None  # Тело рассылаемого сообщения
-broadcast_func_messages_ids = [] #Словарь системных сообщений группы функций broadcast
 
-del_time = 0.5  # Задержка между сообщениями бота
+def morning_routine():
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    threshold = datetime.now() - timedelta(hours=51)
+
+    cursor.execute("DELETE FROM message_ids WHERE date_added < ?",
+                   (threshold,))
+
+    users_db.commit()
+    users_db.close()
 
 
-@bot.message_handler(commands=['start', 'help'])  # Запуск бота по комманде /start и вызов главного меню по /help
-def start(message, debug=None):
-    user = message.from_user.first_name  # Имя пользователя в базе SQL
+morning_routine()
+
+
+def check_bd_chat_id(func):
+    '''
+    Decorator to check if a user's chat ID exists in the database.
+    If not found, it suggests the user to
+    press /start to initialize their chat session.
+
+    :param func: The function to be decorated.
+    :return: The decorated function.
+    '''
+
+    def wrapper(message, *args):
+        users_db = sqlite3.connect('UsersDB.sql')
+        cursor = users_db.cursor()
+        chat_id = message.chat.id
+
+        cursor.execute("SELECT username FROM polzovately "
+                       "WHERE chat_id = ?", (chat_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        users_db.close()
+        if result:
+            return func(message, *args)
+        else:
+            return chepuha(message, debug=True)
+
+    return wrapper
+
+
+@Bot.message_handler(commands=['start', 'help'])
+def start_help(message, debug: bool = False):
+    user = message.chat.first_name  # Имя пользователя в базе SQL
     chat_id = message.chat.id  # ID чата с пользователем в базе SQL
-    user_id = message.from_user.id  # ID пользователя в базе SQL
 
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    markup = types.InlineKeyboardMarkup()
+    btn_soc_profiles = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1',
+                                                  callback_data='soc_profiles')
+    btn_shop = types.InlineKeyboardButton(text='Наш магазин  \U0001F6CD',
+                                          callback_data='shop')
+    btn_studio = types.InlineKeyboardButton(text='О студии \U0001F393',
+                                            callback_data='studio')
+    btn_offsite = types.InlineKeyboardButton(text='Выездные МК  \U0001F30D',
+                                             callback_data='offsite_workshops')
+    btn_tarot = types.InlineKeyboardButton(text='Карты ТАРО \U00002728',
+                                           callback_data='tarot')
+    btn_clean = types.InlineKeyboardButton(text=f'Очистить чат \U0001F9F9',
+                                           callback_data='clean')
+    markup.row(btn_studio, btn_shop)
+    markup.row(btn_offsite, btn_soc_profiles)
+    markup.row(btn_tarot, btn_clean)
+
+    if chat_id in ADMIN_IDS:
+        btn_admin = types.InlineKeyboardButton(
+            '\U0001F60E Кнопка администратора \U0001F60E',
+            callback_data='admin')
+        markup.row(btn_admin)
+
     try:
         cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?",
                        (chat_id,))
         user_name = cursor.fetchone()[0]
-    except:
-        pass
-
-    markup = types.InlineKeyboardMarkup()  # Кнопки
-    btn_socseti = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1', callback_data='socseti')
-    btn_shop = types.InlineKeyboardButton(text='Наш магазин  \U0001F6CD', callback_data='shop')
-    btn_studia = types.InlineKeyboardButton(text='О студии \U0001F393', callback_data='studia')
-    btn_viezd = types.InlineKeyboardButton(text='Выездные МК  \U0001F30D', callback_data='viezd')
-    btn_tarot = types.InlineKeyboardButton(text='Карты ТАРО \U00002728', callback_data='tarot')
-    btn_clean = types.InlineKeyboardButton(text=f'Очистить чат \U0001F9F9', callback_data='clean')
-    markup.row(btn_studia, btn_shop)
-    markup.row(btn_viezd, btn_socseti)
-    markup.row(btn_tarot, btn_clean)
-
-    admin_ids = [154395483, 1019826386]  # Проверка админов для вывода спец кнопки
-    if chat_id in admin_ids:
-        btn_admin = types.InlineKeyboardButton('\U0001F60E Кнопка администратора \U0001F60E', callback_data='admin')
-        markup.row(btn_admin)
+        if user != user_name:
+            cursor.execute(
+                'UPDATE polzovately SET username = ? WHERE chat_id = ?',
+                (user, chat_id))
+    except TypeError:
+        cursor.execute(
+            'INSERT INTO polzovately (chat_id, username) VALUES '
+            '(?, ?)',
+            (chat_id, user))
 
     if message.text == '/start':  # Обработка команды /start
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id))  # Сохранение id сообщения от пользователя
-        UsersBD.commit()
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)', (
+                           message.chat.id,
+                           message.message_id))
 
-        cursor.execute('SELECT * FROM polzovately WHERE chat_id = ?', (chat_id,))
-        row = cursor.fetchone()
+        cursor.execute('SELECT * FROM polzovately WHERE chat_id = ?',
+                       (chat_id,))
 
-        if row is None:  # Если имени пользователя нет в БД
-            cursor.execute('INSERT INTO polzovately (chat_id, user_id, username) VALUES (?, ?, ?)', (chat_id, user_id, user))
-        else:
-            cursor.execute('UPDATE polzovately SET username = ? WHERE chat_id = ?', (user, chat_id))
-
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (
-        message.chat.id, bot.send_message(message.chat.id,
-                                          f'<b>Здравствуйте, <u>{message.from_user.first_name}</u>! \U0001F642'
-                                          f'\nМеня зовут CraftStudioBot.</b>'
-                                          f'\nЧем я могу вам помочь?',
-                                          parse_mode='html',
-                                          reply_markup=markup).message_id))
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)', (
+                           message.chat.id, Bot.send_message(
+                               message.chat.id,
+                               f'<b>Здравствуйте, <u>{user}</u>! \U0001F642'
+                               f'\nМеня зовут '
+                               f'CraftStudioBot.</b>'
+                               f'\nЧем я могу вам помочь?',
+                               parse_mode='html',
+                               reply_markup=markup).message_id))
     else:
-        if debug == None:
-            bot.delete_message(message.chat.id, message.id)
+        if not debug:
+            Bot.delete_message(message.chat.id, message.id)
         else:
             pass
 
-        time.sleep(del_time)
+        time.sleep(DEL_TIME)
 
         lang = random.randint(1, 1000)
 
         lang_greet_dict = {
-            900: f'<b>?ьчомоп мав угом я меч, <u>{user_name[::-1]}</u></b> \U0001F643',
-            901: f'<b>नमस्ते <u>{user_name}</u>, मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642',
-            902: f'<b>Greetings <u>{user_name}</u>, how can I help you?</b> \U0001F642',
-            903: f'<b>¡Hola! <u>{user_name}</u>, ¿le puedo ayudar en algo?</b> \U0001F642',
-            904: f'<b>你好 <u>{user_name}</u>, 我怎么帮你？</b> \U0001F642',
-            999: f'<b>Γειά σας <u>{user_name}</u>, πώς μπορώ να σε βοηθήσω?</b> \U0001F642',
-            'default': f'<b><u>{user_name}</u>, чем я могу вам помочь?</b> \U0001F642'
+            900: f'<b>?ьчомоп мав угом я меч, '
+                 f'<u>{user[::-1]}</u></b> \U0001F643',
+            901: f'<b>नमस्ते <u>{user}</u>, '
+                 f'मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642',
+            902: f'<b>Greetings <u>{user}</u>, '
+                 f'how can I help you?</b> \U0001F642',
+            903: f'<b>¡Hola! <u>{user}</u>, '
+                 f'¿le puedo ayudar en algo?</b> \U0001F642',
+            904: f'<b>你好 <u>{user}</u>, '
+                 f'我怎么帮你？</b> \U0001F642',
+            906: f'<b>مرحبا <u>{user}</u>, كيف يمكنني مساعدتك؟'
+                 f'</b> \U0001F642',
+            907: f'<b>Merhaba <u>{user}</u>, '
+                 f'nasıl yardımcı olabilirim?</b> \U0001F642',
+            908: f'<b>Konnichiwa <u>{user}</u>, '
+                 f'dou tasukeraremasuka?</b> \U0001F642',
+            909: f'<b>Hallo <u>{user}</u>, '
+                 f'wie kann ich Ihnen helfen?</b> \U0001F642',
+            910: f'<b>Bonjour <u>{user}</u>, '
+                 f'comment puis-je vous aider?</b> \U0001F642',
+            911: f'<b>Ciao <u>{user}</u>, '
+                 f'come posso aiutarti?</b> \U0001F642',
+            912: f'<b>Szia <u>{user}</u>, hogyan segíthetek?</b> \U0001F642',
+            913: f'<b>Olá <u>{user}</u>, '
+                 f'como posso ajudar?</b> \U0001F642',
+            914: f'<b>Hej <u>{user}</u>, '
+                 f'hur kan jag hjälpa dig?</b> \U0001F642',
+            915: f'<b>Saluton <u>{user}</u>, '
+                 f'kiel mi povas helpi vin?</b> \U0001F642',
+            916: f'<b>Rytsas, <u>{user}</u>, '
+                 f'skorkydoso kostagon nyke dohaeragon ao?</b> \U0001F642',
+            917: f'<b>Sveiki <u>{user}</u>, '
+                 f'kaip galiu jums padėti?</b> \U0001F642',
+            918: f'<b>Բարև <u>{user}</u>, '
+                 f'ինչպես կարող եմ օգնել ձեզ?</b> \U0001F642',
+            919: f'<b>Sawubona <u>{user}</u>, '
+                 f'ngicela ngingakusiza njani?</b> \U0001F642',
+            920: f'<b>Γειά σας <u>{user}</u>, '
+                 f'πώς μπορώ να σε βοηθήσω?</b> \U0001F642',
+            'default': f'<b><u>{user}</u>, '
+                       f'чем я могу вам помочь?</b> \U0001F642'
         }
 
         message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
                        (message.chat.id,
-                        bot.send_message(message.chat.id, message_text,
+                        Bot.send_message(message.chat.id, message_text,
                                          parse_mode='html',
                                          reply_markup=markup).message_id))
 
-    UsersBD.commit()
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-@bot.message_handler(commands=['clean'])
+@Bot.message_handler(commands=['clean'])
+@check_bd_chat_id
 def clean(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_da = types.InlineKeyboardButton(text = 'Да', callback_data = 'delete_message')
-    btn_net = types.InlineKeyboardButton(text = 'Нет', callback_data = 'help')
+    btn_da = types.InlineKeyboardButton(text='Да',
+                                        callback_data='delete_message')
+    btn_net = types.InlineKeyboardButton(text='Нет', callback_data='help')
     markup.row(btn_da, btn_net)
-    bot.delete_message(message.chat.id, message.id)
+    Bot.delete_message(message.chat.id, message.id)
     time.sleep(0.5)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                   (message.chat.id, bot.send_message(message.chat.id, f"Вы хотите полностью очистить этот чат?"
-                                                                       f"\n"
-                                                                       f"\n*Сообщения, отправленные более 48ч. назад и рассылка удалены не будут", reply_markup=markup).message_id))
+    cursor.execute(
+        'INSERT INTO message_ids (chat_id, message_id)'
+        ' VALUES (?, ?)',
+        (message.chat.id,
+         Bot.send_message(
+             message.chat.id,
+             f"Вы хотите полностью очистить этот чат?"
+             f"\n"
+             f"\n*Сообщения, отправленные более 48ч. назад и рассылка "
+             f"удалены не будут",
+             reply_markup=markup).message_id))
 
-    UsersBD.commit()
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
 def delete_message(message):
-
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-    cursor.execute('SELECT message_id FROM message_ids WHERE chat_id = ?', (message.chat.id,))
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+    cursor.execute('SELECT message_id FROM message_ids WHERE chat_id = ?',
+                   (message.chat.id,))
     message_ids = cursor.fetchall()
-    chat_id = message.chat.id
 
-    bot.delete_message(message.chat.id, message.id)
-    sent_message = bot.send_message(message.chat.id, f"<b>Идёт очистка чата</b> \U0001F9F9", parse_mode = 'html')
+    Bot.delete_message(message.chat.id, message.id)
+    sent_message = Bot.send_message(message.chat.id,
+                                    f"<b>Идёт очистка чата</b> \U0001F9F9",
+                                    parse_mode='html')
 
     for message_id in message_ids:
         cursor.execute(
             'DELETE FROM message_ids WHERE chat_id = ? AND message_id = ?',
             (message.chat.id, message_id[0]))
-        UsersBD.commit()
+        users_db.commit()
         try:
-            bot.delete_message(message.chat.id, message_id[0])
-            time.sleep(0.05)
-        except:
+            Bot.delete_message(message.chat.id, message_id[0])
+            time.sleep(0.01)
+        except ApiTelegramException:
             pass
 
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
-    bot.delete_message(sent_message.chat.id, sent_message.message_id)
+    Bot.delete_message(sent_message.chat.id, sent_message.message_id)
 
 
-def admin(message): #Админское меню
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def admin(message):  # Админское меню
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='help')
-    markup.row(btn_Nazad)
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, '<b>Добро пожаловать в админское меню!</b>'
-                                           '\n'
-                                           '\n/broadcast - Начать процедуру рассылки'
-                                           '\n'
-                                           '\n/users - Узнать сколько пользователей в БД'
-                                           '\n'
-                                           '\n/proportions - Калькулятор пропорций', parse_mode='html', reply_markup=markup).message_id))
+    btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                   ' VALUES (?, ?)',
+                   (message.chat.id,
+                    Bot.send_message(
+                        message.chat.id,
+                        '<b>Добро пожаловать в админское меню!</b>'
+                        '\n'
+                        '\n/broadcast - Начать процедуру рассылки'
+                        '\n'
+                        '\n/users - Узнать сколько пользователей в БД'
+                        '\n'
+                        '\n/proportions - Калькулятор пропорций',
+                        parse_mode='html',
+                        reply_markup=markup).message_id))
 
-    UsersBD.commit()
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
-#Начало админских комманд
-@bot.message_handler(commands=['proportions'])
-def proportions(message, debug=None):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
 
-    if message.chat.id in [154395483, 1019826386]:
-        if debug == None:
-            bot.delete_message(message.chat.id, message.id)
-            time.sleep(del_time)
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'Введите через пробел:\nПропорции компонентов <b>A</b> и <b>B</b>, и общую массу - <b>C</b>', parse_mode='html').message_id))
-        bot.register_next_step_handler(message, calculate_proportions)
+@Bot.message_handler(commands=['proportions'])
+@check_bd_chat_id
+def proportions(message, debug: bool = False):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    if message.chat.id in ADMIN_IDS:
+        if not debug:
+            Bot.delete_message(message.chat.id, message.id)
+            time.sleep(DEL_TIME)
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)', (
+                           message.chat.id,
+                           Bot.send_message(
+                               message.chat.id,
+                               f'Введите через пробел: '
+                               f'\nПропорции компонентов '
+                               f'<b>A</b> и <b>B</b>, '
+                               f'и общую массу - <b>C</b>',
+                               parse_mode='html').message_id))
+        Bot.register_next_step_handler(message, calculate_proportions)
     else:
         chepuha(message)
 
-    UsersBD.commit()
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
+
 
 def calculate_proportions(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id)) #Сохранение id сообщения от пользователя
-    UsersBD.commit()
+    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                   ' VALUES (?, ?)',
+                   (message.chat.id,
+                    message.message_id))
+    users_db.commit()
 
     markup = types.InlineKeyboardMarkup()
-    btn_another_one = types.InlineKeyboardButton('Другая пропорция', callback_data='another_proportion')
+    btn_another_one = types.InlineKeyboardButton(
+        'Другая пропорция',
+        callback_data='another_proportion')
     markup.add(btn_another_one)
 
-    if len(message.text.split()) == 3:
+    def is_number(item):
         try:
-            prop_input_split = message.text.replace(',', '.').split()
+            float(item)
+            return True
+        except ValueError:
+            return False
 
-            A = float(prop_input_split[0])
-            B = float(prop_input_split[1])
-            C = float(prop_input_split[2])
+    prop_input_split = message.text.replace(',', '.').split()
+    digit_check = all(is_number(item) for item in prop_input_split)
 
-            A_gr = (C / (A + B)) * A
-            B_gr = (C / (A + B)) * B
+    if len(message.text.split()) == 3 and digit_check:
+        a_input, b_input, c_input = map(float, prop_input_split)
 
-            A_num = int(str(A_gr).split('.')[1])
-            B_num = int(str(B_gr).split('.')[1])
-            C_num = int(str(C).split('.')[1])
+        a_gr = (c_input / (a_input + b_input)) * a_input
+        b_gr = (c_input / (a_input + b_input)) * b_input
 
-            if A_num == 0:
-                A_new = int(A_gr)
-            else:
-                A_new = (str(round(A_gr, 2))).replace('.', ',')
+        a_percent = 100 / (a_gr + b_gr) * a_gr
+        b_percent = 100 / (a_gr + b_gr) * b_gr
 
-            if B_num == 0:
-                B_new = int(B_gr)
-            else:
-                B_new = (str(round(B_gr, 2))).replace('.', ',')
+        a_part_new = int(a_percent) if a_percent.is_integer() \
+            else round(a_percent, 2)
+        b_part_new = int(b_percent) if b_percent.is_integer() \
+            else round(b_percent, 2)
 
-            if C_num == 0:
-                C_new = int(C)
-            else:
-                C_new = str(C).replace('.', ',')
+        a_new = int(a_gr) if a_gr.is_integer() else round(a_gr, 2)
+        b_new = int(b_gr) if b_gr.is_integer() else round(b_gr, 2)
+        c_new = int(c_input) if c_input.is_integer() else round(c_input, 2)
 
-
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.reply_to(message, f'Для раствора массой: <b>{C_new} гр.\nНеобходимо:</b>\n<b>{A_new} гр.</b> Компонента <b>A</b>\n<b>{B_new} гр.</b> Компонента <b>B</b>', reply_markup = markup,parse_mode='html').message_id))
-        except:
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f"Неверный формат данных.\nПожалуйста, введите числа по образцу:\n<b>A B C</b>", parse_mode='html').message_id))
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)', (
+                           message.chat.id,
+                           Bot.reply_to(
+                               message,
+                               f'Для раствора массой: <b>{c_new} гр.'
+                               f'\nНеобходимо:</b>'
+                               f'\n<b>{a_new} гр.</b> Компонента <b>A</b> '
+                               f'({a_part_new} %)'
+                               f'\n<b>{b_new} гр.</b> Компонента <b>B</b> '
+                               f'({b_part_new} %)',
+                               reply_markup=markup,
+                               parse_mode='html').message_id))
     else:
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f"Неверный формат данных.\nПожалуйста, введите числа по образцу:\n<b>A B C</b>", parse_mode='html').message_id))
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)', (
+                           message.chat.id,
+                           Bot.send_message(
+                               message.chat.id,
+                               f"Неверный формат данных."
+                               f"\nПожалуйста, "
+                               f"введите числа по образцу:\n<b>A B C</b>",
+                               parse_mode='html').message_id))
 
-    UsersBD.commit()
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
-@bot.message_handler(commands=['users'])
-def usersDB(message): #Обработка команды, которая возвращает кол-во пользователей из БД (Хоть раз взаимодействовали с ботом)
-    if message.from_user.id in [154395483, 1019826386]:
-        UsersBD = sqlite3.connect('UsersDB.sql')
-        cursor = UsersBD.cursor()
+
+@Bot.message_handler(commands=['users'])
+@check_bd_chat_id
+def get_users_count(message):
+    if message.chat.id in ADMIN_IDS:
+        users_db = sqlite3.connect('UsersDB.sql')
+        cursor = users_db.cursor()
         cursor.execute("SELECT COUNT(username) FROM polzovately")
         count = cursor.fetchone()[0]
 
-        sent_message = bot.send_message(message.chat.id, f"Количество пользователей в БД: {count}")
-        bot.delete_message(message.chat.id, message.id)
+        sent_message = Bot.send_message(
+            message.chat.id,
+            f"Количество пользователей в БД: {count}"
+        )
+
+        Bot.delete_message(message.chat.id, message.id)
 
         cursor.close()
-        UsersBD.close()
+        users_db.close()
 
         time.sleep(3.5)
 
-        bot.delete_message(sent_message.chat.id, sent_message.message_id)
+        Bot.delete_message(sent_message.chat.id, sent_message.message_id)
     else:
         chepuha(message)
 
 
-@bot.message_handler(commands=['broadcast'])
+@Bot.message_handler(commands=['broadcast'])
+@check_bd_chat_id
 def start_broadcast(message):
-    global broadcast_admin_id
+    global BROADCAST_ADMIN_ID
 
-    UsersBD = sqlite3.connect('UsersDB.sql')
-    cursor = UsersBD.cursor()
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
     btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
                                                       callback_data='cancel')
     markup.add(btn_cancel_broadcast)
 
-    if message.from_user.id in [154395483, 1019826386] and broadcast_admin_id is None:
-        broadcast_admin_id = message.from_user.id
-        bot.delete_message(message.chat.id, message.id)
-        time.sleep(del_time)
-        broadcast_func_messages_ids.append((bot.send_message(message.chat.id, "Отправьте сообщение для рассылки", reply_markup=markup)).message_id)
-        bot.register_next_step_handler(message, confirm_broadcast)
-    elif message.from_user.id in [154395483, 1019826386] and broadcast_admin_id is not None:
-        new_message_id = str(bot.send_message(message.chat.id, "Сейчас идёт рассылка другого администратора").message_id)
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+    if message.chat.id in ADMIN_IDS and BROADCAST_ADMIN_ID is None:
+        BROADCAST_ADMIN_ID = message.from_user.id
+        Bot.delete_message(message.chat.id, message.id)
+        time.sleep(DEL_TIME)
+
+        BROADCAST_FUNC_MESSAGES_IDS.append(
+            (Bot.send_message(message.chat.id,
+                              "Отправьте сообщение для рассылки",
+                              reply_markup=markup)).message_id
+        )
+
+        Bot.register_next_step_handler(message, confirm_broadcast)
+
+    elif message.chat.id in ADMIN_IDS and BROADCAST_ADMIN_ID is not None:
+        new_message_id = Bot.send_message(
+            message.chat.id,
+            "Сейчас идёт рассылка другого администратора"
+        ).message_id
+
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
                        (message.chat.id, new_message_id))
+
     else:
         chepuha(message)
 
-    UsersBD.commit()
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
 def confirm_broadcast(message):
-    global broadcast_message
+    global BROADCAST_MESSAGE
 
-    if broadcast_admin_id is not None:
-        UsersBD = sqlite3.connect('UsersDB.sql')
-        cursor = UsersBD.cursor()
+    if BROADCAST_ADMIN_ID is not None:
+        users_db = sqlite3.connect('UsersDB.sql')
+        cursor = users_db.cursor()
 
-        broadcast_message = message
-        broadcast_func_messages_ids.append(broadcast_message.id)
+        BROADCAST_MESSAGE = message
+        BROADCAST_FUNC_MESSAGES_IDS.append(BROADCAST_MESSAGE.id)
 
         markup = types.InlineKeyboardMarkup()
-        btn_send_broadcast = types.InlineKeyboardButton('Разослать',
-                                                        callback_data='send_broadcast')
-        btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
-                                                          callback_data='cancel')
+
+        btn_send_broadcast = types.InlineKeyboardButton(
+            'Разослать',
+            callback_data='send_broadcast'
+        )
+
+        btn_cancel_broadcast = types.InlineKeyboardButton(
+            'Отменить',
+            callback_data='cancel'
+        )
+
         markup.add(btn_send_broadcast, btn_cancel_broadcast)
 
-        broadcast_func_messages_ids.append((bot.send_message(message.chat.id, 'Разослать сообщение?',
-                                                             reply_markup=markup)).id)
+        BROADCAST_FUNC_MESSAGES_IDS.append(
+            (Bot.send_message(message.chat.id, 'Разослать сообщение?',
+                              reply_markup=markup)).id)
 
-        UsersBD.commit()
+        users_db.commit()
         cursor.close()
-        UsersBD.close()
+        users_db.close()
 
-@bot.callback_query_handler(func=lambda call: call.data == "send_broadcast")
+
+@Bot.callback_query_handler(func=lambda call: call.data == "send_broadcast")
 def send_broadcast(call):
-    global broadcast_message
-    global broadcast_admin_id
-    global broadcast_func_messages_ids
+    global BROADCAST_MESSAGE
+    global BROADCAST_ADMIN_ID
+    global BROADCAST_FUNC_MESSAGES_IDS
 
-    bot.answer_callback_query(call.id)
+    Bot.answer_callback_query(call.id)
 
-    UsersBD = sqlite3.connect('UsersDB.sql')
-    cursor = UsersBD.cursor()
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
     cursor.execute("SELECT chat_id FROM polzovately")
     chat_ids = cursor.fetchall()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
-    for func_message_id in broadcast_func_messages_ids:
+    broadcast_type = BROADCAST_MESSAGE.content_type
+
+    while BROADCAST_FUNC_MESSAGES_IDS:
+        func_message_id = BROADCAST_FUNC_MESSAGES_IDS.pop(0)
+        Bot.delete_message(call.message.chat.id, func_message_id)
         time.sleep(0.2)
-        bot.delete_message(call.message.chat.id, func_message_id)
-    broadcast_func_messages_ids = []
 
-    time.sleep(del_time)
-    sent_message = bot.send_message(call.message.chat.id, text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>', parse_mode='html')
+    time.sleep(DEL_TIME)
+    sent_message = Bot.send_message(call.message.chat.id,
+                                    text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>',
+                                    parse_mode='html')
     start_time = datetime.now().strftime("%d-%m-%Y %H:%M").split('.')[0]
 
-
-    if broadcast_message.content_type == 'photo':
-        content_function = bot.send_photo
-        content_args = {'caption': broadcast_message.caption}
-        content_value = broadcast_message.photo[-1].file_id
-    elif broadcast_message.content_type == 'text':
-        content_function = bot.send_message
+    if broadcast_type == 'photo':
+        broadcast_function = Bot.send_photo
+        content_args = {'caption': BROADCAST_MESSAGE.caption}
+        content_value = BROADCAST_MESSAGE.photo[-1].file_id
+    elif broadcast_type == 'text':
+        broadcast_function = Bot.send_message
         content_args = {}
-        content_value = broadcast_message.text
+        content_value = BROADCAST_MESSAGE.text
 
     send_count = 0
     for chat_id in chat_ids:
-        if str(chat_id[0]) != str(broadcast_admin_id):
+        if str(chat_id[0]) != str(BROADCAST_ADMIN_ID):
             try:
-                content_function(chat_id[0], content_value, **content_args)
+                broadcast_function(chat_id[0], content_value, **content_args)
                 send_count += 1
                 time.sleep(0.1)
-            except:
+            except ApiTelegramException:
                 pass
 
-    bot.delete_message(call.message.chat.id, sent_message.id)
-    time.sleep(del_time)
+    Bot.delete_message(call.message.chat.id, sent_message.id)
+    time.sleep(DEL_TIME)
 
-    if str(send_count)[-1] in ['2', '3', '4'] and str(send_count) not in ['12', '13', '14']:
+    if (str(send_count)[-1] in ['2', '3', '4']
+            and str(send_count) not in ['12', '13', '14']):
         users_get = 'пользователя получили'
     elif str(send_count)[-1] == '1' and str(send_count) not in ['11']:
         users_get = 'пользователь получил'
     else:
         users_get = 'пользователей получили'
-    broadcast_success = f'<b>{send_count}</b> {users_get} рассылку от:\n\n\U0001F4C7 {start_time.split()[0]}\n\n\U0000231A {start_time.split()[1]}'
 
-    bot.send_message(call.message.chat.id, f'{broadcast_success}'
-                                           f'\n'
-                                           f'\n\U00002B07 <b>Содержание</b> \U00002B07', parse_mode='html')
-    time.sleep(del_time)
-    content_function(call.message.chat.id, content_value, **content_args)
+    broadcast_success = (f'<b>{send_count}</b> {users_get} рассылку от:'
+                         f'\n\n\U0001F4C7 {start_time.split()[0]}'
+                         f'\n\n\U0000231A {start_time.split()[1]}'
+                         )
 
-    broadcast_admin_id = None
-    broadcast_message = None
+    Bot.send_message(call.message.chat.id,
+                     f'{broadcast_success}'
+                     f'\n'
+                     f'\n\U00002B07 <b>Содержание</b> \U00002B07',
+                     parse_mode='html'
+                     )
 
-@bot.callback_query_handler(func=lambda call: call.data == 'cancel')
+    time.sleep(DEL_TIME)
+    broadcast_function(call.message.chat.id, content_value, **content_args)
+
+    BROADCAST_ADMIN_ID = None
+    BROADCAST_MESSAGE = None
+
+
+@Bot.callback_query_handler(func=lambda call: call.data == 'cancel')
 def cancel_broadcast(call):
-    global broadcast_message
-    global broadcast_admin_id
-    global broadcast_func_messages_ids
+    global BROADCAST_MESSAGE
+    global BROADCAST_ADMIN_ID
+    global BROADCAST_FUNC_MESSAGES_IDS
 
-    bot.answer_callback_query(call.id)
+    Bot.answer_callback_query(call.id)
 
-    for func_message_id in broadcast_func_messages_ids:
+    while BROADCAST_FUNC_MESSAGES_IDS:
+        func_message_id = BROADCAST_FUNC_MESSAGES_IDS.pop(0)
+        Bot.delete_message(call.message.chat.id, func_message_id)
         time.sleep(0.2)
-        bot.delete_message(call.message.chat.id, func_message_id)
 
-    broadcast_admin_id = None
-    broadcast_message = None
-    broadcast_func_messages_ids = []
+    BROADCAST_ADMIN_ID = None
+    BROADCAST_MESSAGE = None
 
-    time.sleep(del_time)
-    sent_message = bot.send_message(call.message.chat.id, text='Рассылка отменена')
+    time.sleep(DEL_TIME)
+    sent_message = Bot.send_message(call.message.chat.id,
+                                    text='Рассылка отменена')
     time.sleep(5)
-    bot.delete_message(call.message.chat.id, sent_message.id)
+    Bot.delete_message(call.message.chat.id, sent_message.id)
 
 
-def tarot_start(message): #Проверка условий для Таро
+def tarot_start(message):  # Проверка условий для Таро
     chat_id = message.chat.id
-    today = datetime.now().date()
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-    cursor.execute("SELECT last_tarrot_date FROM polzovately WHERE chat_id = ?", (chat_id,))
-    last_tarrot_date = cursor.fetchone()[0]
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
-    admin_ids = [154395483, 1019826386]  # Проверка админов
+    cursor.execute(
+        "SELECT last_tarrot_date FROM polzovately WHERE chat_id = ?",
+        (chat_id,)
+    )
 
-    if chat_id in admin_ids:
-        bot.delete_message(message.chat.id, message.id)
-        time.sleep(del_time)
-        get_random_tarot_cards(message)
-        start(message, 1)
+    today = datetime.today().date().strftime('%d-%m-%Y')
+    last_tarot_date = cursor.fetchone()[0]
+
+    if chat_id in ADMIN_IDS:
+        Bot.delete_message(message.chat.id, message.id)
+        time.sleep(DEL_TIME)
+        tarot_main(message)
+        start_help(message, True)
+
     else:
-        if last_tarrot_date is None or last_tarrot_date == '':
-            last_tarrot_date = today
-            cursor.execute("UPDATE polzovately SET last_tarrot_date = ? WHERE chat_id = ?",
-                           (last_tarrot_date.strftime("%Y-%m-%d"), chat_id))
-            UsersBD.commit()
-            bot.delete_message(message.chat.id, message.id)
-            time.sleep(del_time)
-            get_random_tarot_cards(message)
-            start(message, 1)
-        else:
-            last_tarrot_date = datetime.strptime(last_tarrot_date, "%Y-%m-%d")
-            if last_tarrot_date.date() == today:
-                cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-                user_name = cursor.fetchone()[0]
-                cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                               (message.chat.id, bot.send_message(message.chat.id, f'<u>{user_name}</u>, вы уже сегодня получили расклад, попробуйте завтра!', parse_mode='html').message_id))
-                UsersBD.commit()
+        if last_tarot_date == today:
+            cursor.execute(
+                "SELECT username FROM polzovately WHERE chat_id = ?",
+                (chat_id,))
+            user_name = cursor.fetchone()[0]
+            cursor.execute(
+                'INSERT INTO message_ids (chat_id, message_id)'
+                ' VALUES (?, ?)',
+                (message.chat.id,
+                 Bot.send_message(
+                     message.chat.id,
+                     f'<u>{user_name}</u>, '
+                     f'вы уже сегодня получили расклад, попробуйте завтра!',
+                     parse_mode='html').message_id)
+            )
 
-            else:
-                cursor.execute("UPDATE polzovately SET last_tarrot_date = ? WHERE chat_id = ?", (today, chat_id))
-                UsersBD.commit()
-                bot.delete_message(message.chat.id, message.id)
-                time.sleep(del_time)
-                get_random_tarot_cards(message)
-                start(message, 1)
+            users_db.commit()
+
+        else:
+            cursor.execute(
+                "UPDATE polzovately SET last_tarrot_date = ? "
+                "WHERE chat_id = ?",
+                (today, chat_id)
+            )
+
+            users_db.commit()
+            Bot.delete_message(message.chat.id, message.id)
+            time.sleep(DEL_TIME)
+            tarot_main(message)
+            start_help(message, True)
 
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def get_random_tarot_cards(message):
-    OS_type = sys.platform
-    tarot_delay = 1.5 # Задержка между картами Таро
+def tarot_main(message):
+    os_type = sys.platform
+    tarot_delay = 1.5  # Задержка между картами Таро
 
-    if OS_type == 'win32':
+    if os_type == 'win32':
         path = 'C:/Users/wwwha/PycharmProjects/CraftStudioBot/Tarot'
         cards = glob.glob(f'{path}/*.jpg')
     else:
         path = '/home/CSBot/Tarot'
         cards = glob.glob(f'{path}/*.jpg')
 
-    user_id = message.chat.id
-    UsersBD = sqlite3.connect('UsersDB.sql')
-    cursor = UsersBD.cursor()
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     user_random_cards = []
 
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, '<b>Расклад Таро - это всего лишь инструмент для ознакомления и развлечения. Расклад карт Таро не является истиной и не должен использоваться для принятия важных решений.</b>'
-                          '\n'
-                          '\n<u>CraftStudioArt</u> и его сотрудники не несут ответственности за любые действия и их последствия, которые повлекло использование данного расклада карт Таро.', parse_mode='html').message_id))
+    cursor.execute(
+        'INSERT INTO message_ids (chat_id, message_id)'
+        ' VALUES (?, ?)',
+        (message.chat.id,
+         Bot.send_message(
+             message.chat.id,
+             '<b>Расклад Таро - это всего лишь инструмент для '
+             'ознакомления и развлечения. '
+             'Расклад карт Таро не является истиной и не должен '
+             'использоваться для принятия важных решений.</b>'
+             '\n'
+             '\n<u>CraftStudioArt</u> и его сотрудники не несут '
+             'ответственности за любые действия и их последствия, '
+             'которые повлекло использование данного расклада карт Таро.',
+             parse_mode='html').message_id))
 
-    UsersBD.commit()
+    users_db.commit()
     time.sleep(tarot_delay)
 
-    if OS_type == 'win32':
+    if os_type == 'win32':
         while len(user_random_cards) < 3:
             card = random.choice(cards)
             card_num = int(card.split('\\')[-1].split('.')[0])
 
-            if card_num not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards]:
-                if card_num % 2 == 1 and card_num + 1 not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards]:
+            if (card_num not in
+                    [int(c.split('\\')[-1].split('.')[0]) for c in
+                     user_random_cards]):
+
+                if (card_num % 2 == 1 and card_num + 1 not in
+                        [int(c.split('\\')[-1].split('.')[0]) for c in
+                         user_random_cards]):
                     user_random_cards.append(card)
-                elif card_num % 2 == 0 and card_num - 1 not in [int(c.split('\\')[-1].split('.')[0]) for c in user_random_cards]:
+
+                elif (card_num % 2 == 0 and card_num - 1 not in
+                      [int(c.split('\\')[-1].split('.')[0]) for c in
+                       user_random_cards]):
                     user_random_cards.append(card)
     else:
         while len(user_random_cards) < 3:
             card = random.choice(cards)
             card_num = int(card.split('/')[-1].split('.')[0])
 
-            if card_num not in [int(c.split('/')[-1].split('.')[0]) for c in user_random_cards]:
-                if card_num % 2 == 1 and card_num + 1 not in [int(c.split('/')[-1].split('.')[0]) for c in
-                                                              user_random_cards]:
+            if (card_num not in
+                    [int(c.split('/')[-1].split('.')[0]) for c in
+                     user_random_cards]):
+
+                if (card_num % 2 == 1 and card_num + 1 not in
+                        [int(c.split('/')[-1].split('.')[0]) for c in
+                         user_random_cards]):
                     user_random_cards.append(card)
-                elif card_num % 2 == 0 and card_num - 1 not in [int(c.split('/')[-1].split('.')[0]) for c in
-                                                                user_random_cards]:
+
+                elif (card_num % 2 == 0 and card_num - 1 not in
+                      [int(c.split('/')[-1].split('.')[0]) for c in
+                       user_random_cards]):
                     user_random_cards.append(card)
 
     captions = ['Прошлое', 'Настоящее', 'Будущее']
 
     for card, caption in zip(user_random_cards, captions):
         with open(card, 'rb') as photo:
-            with open(f'{card[:-4]}.txt', 'r', encoding='utf-8') as text:
+            with open(f'{card[:-4]}.txt', encoding='utf-8') as text:
                 description = text.read()
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                               (message.chat.id, bot.send_photo(message.chat.id, photo, caption=f'<b>{caption}</b>: {description}', parse_mode='html').message_id))
-            UsersBD.commit()
+            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                           ' VALUES (?, ?)',
+                           (message.chat.id,
+                            Bot.send_photo(
+                                message.chat.id, photo,
+                                caption=f'<b>{caption}</b>: {description}',
+                                parse_mode='html').message_id))
+
+            users_db.commit()
             time.sleep(tarot_delay)
 
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-@bot.message_handler(commands=['studia'])
-def studia(message): #Вкладка студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+@Bot.message_handler(commands=['studio'])
+@check_bd_chat_id
+def studio(message):  # Вкладка студии
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_napravleniya = types.InlineKeyboardButton('Подробнее о направлениях', callback_data='napravleniya')
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='help')
-    btn_2gis = types.InlineKeyboardButton(text='Наша студия в 2GIS', url='https://go.2gis.com/8od46')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_napravleniya)
-    markup.row(btn_bronirovanie)
+    btn_dirs = types.InlineKeyboardButton('Подробнее о направлениях',
+                                          callback_data='directions')
+    btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
+    btn_2gis = types.InlineKeyboardButton(text='Наша студия в 2GIS',
+                                          url='https://go.2gis.com/8od46')
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Записаться на МК \U000026A1',
+        url='https://t.me/elenitsa17')
+    markup.row(btn_dirs)
+    markup.row(btn_tg_dm)
     markup.row(btn_2gis)
-    markup.row(btn_Nazad)
-    img_studia = open('IMG_5377.PNG', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                   (message.chat.id, bot.send_photo(message.chat.id, img_studia, caption=f'<b>Наша мастерская</b> – это то место, где вы сможете раскрыть свой потенциал и реализовать идеи в разных направлениях: свечеварение, эпоскидная смола, рисование, роспись одежды и многое другое. '
-                                                        '\n'
-                                                        '\n\U0001F4CD<u>Наши адреса:'
-                                                        '\n</u><b>\U00002693 г. Новороссийск, с. Цемдолина, ул. Цемесская, д. 10'
-                                                        '\n\U00002600 г. Анапа, с. Витязево, ул. Курганная, д. 29</b>', parse_mode='html', reply_markup=markup).message_id))
-    img_studia.close()
-    UsersBD.commit()
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+    with open('studio_and_directions/studio_img.PNG', 'rb') as img_studio:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_studio,
+                            caption=f'<b>Наша мастерская</b> – это то место, '
+                                    f'где вы сможете раскрыть '
+                                    f'свой потенциал и '
+                                    f'реализовать идеи в разных направлениях: '
+                                    f'свечеварение, эпоскидная смола, '
+                                    f'рисование, '
+                                    f'роспись одежды и многое другое. '
+                                    '\n'
+                                    '\n\U0001F4CD<u>Наши адреса:'
+                                    '\n</u><b>\U00002693 г. Новороссийск, '
+                                    'с. Цемдолина, ул. Цемесская, д. 10'
+                                    '\n\U00002600 г. Анапа, с. Витязево, '
+                                    'ул. Курганная, д. 29</b>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def napravleniya(message): #Кнопки с описаниями занятий для вкладки СТУДИЯ
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def directions(message, offsite=False):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Smola = types.InlineKeyboardButton(text='Эпоксидная смола', callback_data='Smola')
-    btn_Gips = types.InlineKeyboardButton (text='Гипс', callback_data='Gips')
-    btn_Sketching = types.InlineKeyboardButton (text='Скетчинг', callback_data='Sketching')
-    btn_TieDye = types.InlineKeyboardButton (text='Тай-Дай', callback_data='TieDye')
-    btn_CustomCloth = types.InlineKeyboardButton (text='Роспись одежды', callback_data='CustomCloth')
-    btn_Svechi = types.InlineKeyboardButton (text='Свечеварение', callback_data='Svechi')
-    btn_Nazad = types.InlineKeyboardButton (text='Назад', callback_data='studia')
-    markup.row(btn_Smola, btn_Gips)
-    markup.row(btn_Sketching,btn_TieDye)
-    markup.row(btn_CustomCloth, btn_Svechi)
-    markup.row(btn_Nazad)
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Выберите <u>направление,</u> о котором хотите узнать подробнее:</b>', parse_mode='html', reply_markup=markup).message_id))
 
-    UsersBD.commit()
+    btn_epoxy = types.InlineKeyboardButton(text='Эпоксидная смола',
+                                           callback_data='epoxy')
+
+    btn_gips = types.InlineKeyboardButton(text='Гипс',
+                                          callback_data='gips'
+                                          if not offsite
+                                          else 'gips_offsite')
+
+    btn_sketching = types.InlineKeyboardButton(text='Скетчинг',
+                                               callback_data='sketching')
+
+    btn_tie_dye = types.InlineKeyboardButton(text='Тай-Дай',
+                                             callback_data='tie_dye'
+                                             if not offsite
+                                             else 'tie_dye_offsite')
+
+    btn_custom_cloth = types.InlineKeyboardButton(text='Роспись одежды',
+                                                  callback_data='custom_cloth')
+
+    btn_candles = types.InlineKeyboardButton(text='Свечеварение',
+                                             callback_data='candles'
+                                             if not offsite
+                                             else 'candles_offsite')
+
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data='studio'
+                                          if not offsite
+                                          else 'offsite_workshops')
+
+    if not offsite:
+        markup.row(btn_epoxy, btn_gips)
+        markup.row(btn_sketching, btn_tie_dye)
+        markup.row(btn_custom_cloth, btn_candles)
+    else:
+        markup.row(btn_gips)
+        markup.row(btn_tie_dye)
+        markup.row(btn_candles)
+    markup.row(btn_back)
+
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                   ' VALUES (?, ?)',
+                   (message.chat.id,
+                    Bot.send_message(
+                        message.chat.id,
+                        f'<b>Выберите <u>направление,</u> о котором хотите '
+                        f'узнать подробнее:</b>',
+                        parse_mode='html',
+                        reply_markup=markup).message_id)
+                   )
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-@bot.message_handler(commands=['mk'])
-def viezd(message): #Вкладка выездных МК
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+@Bot.message_handler(commands=['mk'])
+@check_bd_chat_id
+def offsite_workshops(message):  # Вкладка выездных МК
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='help')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Забронировать МК \U000026A1', url='https://t.me/elenitsa17')
-    btn_napravleniya_2 = types.InlineKeyboardButton('Подробнее о направлениях', callback_data='napravleniya_2')
-    markup.row(btn_napravleniya_2)
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_studia = open('IMG_5378.PNG', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_studia, caption='<b>Вы хотите удивить гостей творческим мастер–классом?</b> '
-                                                        '\n'
-                                                        '\n Наша студия готова приехать к вам с оборудованием и материалами по любой теме из нашего каталога: свечеварение, рисование, роспись одежды и другие. Мы обеспечим все необходимое для проведения МК в любом месте – в помещении или на свежем воздухе. '
-                                                        '\n'
-                                                        '\n <u>Все гости получат новые знания, навыки и подарки, сделанные своими руками!</u>' , parse_mode='html', reply_markup=markup).message_id))
-    img_studia.close()
+    btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
 
-    UsersBD.commit()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Забронировать МК \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+
+    btn_directions_offsite = types.InlineKeyboardButton(
+        'Подробнее о направлениях',
+        callback_data='directions_offsite'
+    )
+
+    markup.row(btn_directions_offsite)
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/offsite_workshops_img.PNG',
+              'rb') as img_studio:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_studio,
+                            caption='<b>Вы хотите удивить гостей '
+                                    'творческим мастер–классом?</b> '
+                                    '\n'
+                                    '\n Наша студия готова приехать к вам c '
+                                    'оборудованием и материалами '
+                                    'по любой теме '
+                                    'из нашего каталога: свечеварение, '
+                                    'рисование, '
+                                    'роспись одежды и другие. '
+                                    'Мы обеспечим все '
+                                    'необходимое для проведения МК в любом '
+                                    'месте – в помещении или '
+                                    'на свежем воздухе. '
+                                    '\n'
+                                    '\n <u>Все гости получат новые '
+                                    'знания, навыки '
+                                    'и подарки, сделанные своими руками!</u>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id)
+                       )
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def napravleniya_2(message): #Кнопки с описаниями занятий для вкладки ВЫЕЗДНЫЕ МК
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+@Bot.message_handler(commands=['shop'])
+@check_bd_chat_id
+def shop(message):  # Вкладка магазина
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Gips = types.InlineKeyboardButton (text='Гипс', callback_data='Gips_2')
-    btn_TieDye = types.InlineKeyboardButton (text='Тай-Дай', callback_data='TieDye_2')
-    btn_Svechi = types.InlineKeyboardButton (text='Свечеварение', callback_data='Svechi_2')
-    btn_Nazad = types.InlineKeyboardButton (text='Назад', callback_data='viezd')
-    markup.row(btn_Gips)
-    markup.row(btn_TieDye)
-    markup.row(btn_Svechi)
-    markup.row(btn_Nazad)
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Выберите <u>направление,</u> о котором хотите узнать подробнее:</b>', parse_mode='html', reply_markup=markup).message_id))
+    btn_catalog_main = types.InlineKeyboardButton('Каталог \U0001F50D',
+                                                  callback_data='catalog')
+    btn_shipment = types.InlineKeyboardButton('Доставка \U0001F4E6',
+                                              callback_data='shipment')
+    btn_order = types.InlineKeyboardButton('Как заказать \U00002705',
+                                           callback_data='order')
+    btn_pay = types.InlineKeyboardButton('Оплата \U0001F4B3',
+                                         callback_data='pay')
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Связаться с нами \U000026A1',
+        url='https://t.me/elenitsa17')
+    btn_back = types.InlineKeyboardButton('Назад', callback_data='help')
+    markup.row(btn_order, btn_catalog_main)
+    markup.row(btn_pay, btn_shipment)
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
 
-    UsersBD.commit()
+    with open('studio_and_directions/craft_shop.png', 'rb') as shop_img:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            shop_img,
+                            caption=f'<b>Добро пожаловать в наш '
+                                    f'крафтовый магазин \U00002728</b>'
+                                    f'\n'
+                                    f'\n Здесь вы найдете уникальные и '
+                                    f'качественные изделия ручной работы, '
+                                    f'созданные с любовью и нежностью. '
+                                    f'Мы предлагаем вам широкий ассортимент '
+                                    f'товаров: декор для дома, подарки, '
+                                    f'украшения, сухоцветы и многое другое.'
+                                    f'\n'
+                                    f'\n <b>Мы гарантируем вам:</b> '
+                                    f'<u>высокое качество, '
+                                    f'индивидуальный подход '
+                                    f'и быструю отправку.</u>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-@bot.message_handler(commands=['shop'])
-def shop(message): #Вкладка магазина
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+@Bot.callback_query_handler(func=lambda call: call.data == "catalog")
+def catalog(call):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    Bot.answer_callback_query(call.id)
+
+    with open('catalog/CSA_catalog.pdf', 'rb') as catalog_pdf:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (call.message.chat.id,
+                        Bot.send_document(
+                            call.message.chat.id,
+                            catalog_pdf,
+                            caption='Представляем наш каталог в формате PDF!'
+                                    '\n\n<b>Редакция от 13.07.2023</b>',
+                            parse_mode='html'
+                        ).message_id))
+
+    users_db.commit()
+    cursor.close()
+    users_db.close()
+
+
+def shipment(message):  # Вкладка "Доставка"
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_catalog_main = types.InlineKeyboardButton ('Каталог \U0001F50D', callback_data='catalog_1')
-    btn_dostavka = types.InlineKeyboardButton ('Доставка \U0001F4E6', callback_data='dostavka')
-    btn_zakaz = types.InlineKeyboardButton ('Как заказать \U00002705', callback_data='zakaz')
-    btn_oplata = types.InlineKeyboardButton ('Оплата \U0001F4B3', callback_data='oplata')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    btn_nazad = types.InlineKeyboardButton ('Назад', callback_data='help')
-    markup.row(btn_zakaz, btn_catalog_main)
-    markup.row(btn_oplata, btn_dostavka)
-    markup.row(btn_vopros)
-    markup.row(btn_nazad)
-    shop_img = open('craft_shop.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, shop_img, caption=f'<b>Добро пожаловать в наш крафтовый магазин \U00002728</b>'
-                                                     f'\n'
-                                                     f'\n Здесь вы найдете уникальные и качественные изделия ручной работы, созданные с любовью и нежностью. Мы предлагаем вам широкий ассортимент товаров: декор для дома, подарки, украшения, сухоцветы и многое другое.'
-                                                     f'\n'
-                                                     f'\n <b>Мы гарантируем вам:</b> <u>высокое качество, индивидуальный подход и быструю отправку.</u>', parse_mode='html', reply_markup=markup).message_id))
-    shop_img.close()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Связаться с нами \U000026A1',
+        url='https://t.me/elenitsa17')
+    btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
 
-    UsersBD.commit()
+    with open('studio_and_directions/shipment.jpg', 'rb') as shipment_img:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            shipment_img,
+                            caption='<b>После изготовления вашего заказа, '
+                                    'на следующий рабочий день мы начинаем '
+                                    'процесс доставки, который '
+                                    'включает в себя следующее:</b>'
+                                    '\n'
+                                    '\n <u>ШАГ 1</u>: '
+                                    'Бережно и надёжно упакуем ваш заказ '
+                                    '\n'
+                                    '\n <u>ШАГ 2</u>: '
+                                    'Отвезем его в выбранную '
+                                    'вами транспортную '
+                                    'компанию (СДЕК, DPD, '
+                                    'Boxberry, почта России)'
+                                    '\n'
+                                    '\n <u>ШАГ 3</u>: В течение '
+                                    'нескольких дней '
+                                    'вы сможете получить ваш заказ'
+                                    '\n'
+                                    '\n Если у вас остались '
+                                    'какие-либо вопросы, '
+                                    'касательно процесса доставки - вы всегда '
+                                    'можете написать нам!',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-#Начало страниц каталога
-def catalog_main(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def pay(message):  # Вкладка "Оплата"
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_catalog_str1 = types.InlineKeyboardButton('1', callback_data='catalog_1')
-    btn_catalog_str2 = types.InlineKeyboardButton('2', callback_data='catalog_2')
-    btn_catalog_str3 = types.InlineKeyboardButton('3', callback_data='catalog_3')
-    btn_catalog_str4 = types.InlineKeyboardButton('4', callback_data='catalog_4')
-    btn_catalog_str5 = types.InlineKeyboardButton('5', callback_data='catalog_5')
-    btn_catalog_str6 = types.InlineKeyboardButton('6', callback_data='catalog_6')
-    btn_catalog_str7 = types.InlineKeyboardButton('7', callback_data='catalog_7')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_catalog_str1,btn_catalog_str2,btn_catalog_str3)
-    markup.row(btn_catalog_str4,btn_catalog_str5,btn_catalog_str6)
-    markup.row(btn_catalog_str7, btn_catalog_exit)
-    markup.row(btn_vopros)
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, '<b>Пожалуйста, выберите страницу каталога, которая вас интересует:</b>', parse_mode='html', reply_markup=markup).message_id))
 
-    UsersBD.commit()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Связаться с нами \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+
+    btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/pay.png', 'rb') as pay_img:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            pay_img,
+                            caption='<u>После выбора товаров '
+                                    'и их характеристик, '
+                                    'а также согласования с '
+                                    'мастером - вам будет '
+                                    'предложено оплатить заказ.</u>'
+                                    '\n'
+                                    '\n<b>Обращаем ваше внимание, '
+                                    'что наша студия '
+                                    'работает только по 100% предоплате!</b>'
+                                    '\n'
+                                    '\n Мы принимаем банковские '
+                                    'переводы на карту '
+                                    'или по СБП, если вам необходим чек '
+                                    'для отчётности - мы вам его предоставим. '
+                                    'После получения оплаты мы начинаем '
+                                    'изготовление вашего заказа в рамках '
+                                    'согласованного заранее срока',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def catalog_1(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def order(message):  # Вкладка "Как заказать"
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_2')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_sled)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_1_img = open('cat_1.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_1_img, caption=f'<b>Страница №1</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_1_img.close()
 
-    UsersBD.commit()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Связаться с нами \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+
+    btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/order.jpg', 'rb') as img_order:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_order,
+                            caption='<b>Заказать красивое '
+                                    'изделие ручной работы '
+                                    'очень просто! Вам потребуется:</b>'
+                                    '\n'
+                                    '\n1) Выбрать из каталога товар, '
+                                    'который вам понравился.'
+                                    '\n'
+                                    '\n2) Запомнить порядковый '
+                                    'номер этого товара.'
+                                    '\n'
+                                    '\n3) Написать нам номер/номера '
+                                    'товаров, которые вы хотели бы заказать. '
+                                    'Наш мастер подскажет, '
+                                    'какие цвета/ароматы '
+                                    'доступны для данного '
+                                    'типа товара, а также '
+                                    'ответит на интересующие вопросы.'
+                                    '\n'
+                                    '\n<u>Фотографии из каталога являются '
+                                    'исключительно ознакомительными. '
+                                    'Мы не гарантируем 100% повторения '
+                                    'изделия с фото, т.к. каждое изделие '
+                                    'изготавливается вручную "с нуля".</u>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def catalog_2(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+@Bot.message_handler(commands=['soc_profiles'])
+@check_bd_chat_id
+def soc_profiles(message):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_3')
-    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_1')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_pred,btn_sled)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_2_img = open('cat_2.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_2_img, caption=f'<b>Страница №2</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_2_img.close()
 
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
+    btn_vk = types.InlineKeyboardButton(
+        text='Группа VK',
+        url='https://vk.com/elenitsa_custom'
+    )
 
+    btn_inst = types.InlineKeyboardButton(
+        text='Instagram',
+        url='https://instagram.com/craft_studio_art'
+    )
 
-def catalog_3(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+    btn_tg_channel = types.InlineKeyboardButton(
+        text='Наш канал в Telegram',
+        url='http://t.me/craft_studio_art'
+    )
 
-    markup = types.InlineKeyboardMarkup()
-    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_4')
-    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_2')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_pred,btn_sled)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_3_img = open('cat_3.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_3_img, caption=f'<b>Страница №3</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_3_img.close()
+    btn_wa = types.InlineKeyboardButton(
+        text='WhatsApp',
+        url='https://wa.me/79186365539'
+    )
 
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='help'
+    )
 
+    btn_ya_disk = types.InlineKeyboardButton(
+        text='Примеры работ на Я.Диск',
+        url='https://disk.yandex.ru/d/Fg1AHRy9DQPQhQ'
+    )
 
-def catalog_4(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='Telegram',
+        url='https://t.me/elenitsa17'
+    )
 
-    markup = types.InlineKeyboardMarkup()
-    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_5')
-    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_3')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_pred,btn_sled)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_4_img = open('cat_4.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_4_img, caption=f'<b>Страница №4</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_4_img.close()
+    btn_support = types.InlineKeyboardButton(
+        text='Тех. поддержка БОТА',
+        url='https://t.me/HarisNvrsk'
+    )
 
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def catalog_5(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_6')
-    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_4')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_pred,btn_sled)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_5_img = open('cat_5.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_5_img, caption=f'<b>Страница №5</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_5_img.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def catalog_6(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_sled = types.InlineKeyboardButton('Следующая', callback_data='catalog_7')
-    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_5')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_pred, btn_sled)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_6_img = open('cat_6.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_6_img, caption=f'<b>Страница №6</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_6_img.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def catalog_7(message):
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_pred = types.InlineKeyboardButton('Предыдущая', callback_data='catalog_6')
-    btn_catalog_main = types.InlineKeyboardButton('Выбрать страницу:', callback_data='catalog_main')
-    btn_catalog_exit = types.InlineKeyboardButton('Выйти из каталога', callback_data='shop')
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_pred)
-    markup.row(btn_catalog_main)
-    markup.row(btn_vopros)
-    markup.row(btn_catalog_exit)
-    cat_7_img = open('cat_7.png','rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, cat_7_img, caption=f'<b>Страница №7</b>', parse_mode = 'html', reply_markup=markup).message_id))
-    cat_7_img.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-#Конец страниц каталога
-
-
-def dostavka(message): #Вкладка "Доставка"
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_vopros= types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    btn_nazad = types.InlineKeyboardButton('Назад', callback_data='shop')
-    markup.row(btn_vopros)
-    markup.row(btn_nazad)
-    dostavka_img = open('dostavka.jpg', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, dostavka_img, caption='<b>После изготовления вашего заказа, на следующий рабочий день мы начинаем процесс доставки, который включает в себя следующее:</b>'
-                                                          '\n'
-                                                          '\n <u>ШАГ 1</u>: Бережно и надёжно упакуем ваш заказ '
-                                                          '\n'
-                                                          '\n <u>ШАГ 2</u>: Отвезем его в выбранную вами транспортную компанию (СДЕК, DPD, Boxberry, почта России)'
-                                                          '\n'
-                                                          '\n <u>ШАГ 3</u>: В течение нескольких дней вы сможете получить ваш заказ'
-                                                          '\n'
-                                                          '\n Если у вас остались какие-либо вопросы, касательно процесса доставки - вы всегда можете написать нам!', parse_mode='html', reply_markup=markup).message_id))
-    dostavka_img.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def oplata(message): #Вкладка "Оплата"
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    btn_nazad = types.InlineKeyboardButton('Назад', callback_data='shop')
-    markup.row(btn_vopros)
-    markup.row(btn_nazad)
-    oplata_img = open('oplata.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, oplata_img, caption='<u>После выбора товаров и их характеристик, а также согласования с мастером - вам будет предложено оплатить заказ.</u>'
-                                                        '\n'
-                                                        '\n<b>Обращаем ваше внимание, что наша студия работает только по 100% предоплате!</b>'
-                                                        '\n'
-                                                        '\n Мы принимаем банковские переводы на карту или по СБП, если вам необходим чек для отчётности - мы вам его предоставим. После получения оплаты мы начинаем изготовление вашего заказа в рамках согласованного заранее срока', parse_mode='html', reply_markup=markup).message_id))
-    oplata_img.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def zakaz(message): #Вкладка "Как заказать"
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_vopros = types.InlineKeyboardButton(text='\U000026A1 Связаться с нами \U000026A1', url='https://t.me/elenitsa17')
-    btn_nazad = types.InlineKeyboardButton('Назад', callback_data='shop')
-    markup.row(btn_vopros)
-    markup.row(btn_nazad)
-    img_zakaz = open('zakaz.jpg' ,'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id,img_zakaz, caption='<b>Заказать красивое изделие ручной работы очень просто! Вам потребуется:</b>'
-                                            '\n'
-                                            '\n1) Выбрать из каталога товар, который вам понравился.'
-                                            '\n'
-                                            '\n2) Запомнить порядковый номер этого товара.'
-                                            '\n'
-                                            '\n3) Написать нам номер или несколько номеров товаров, которые вы хотели бы заказать. Наш мастер подскажет, какие цвета/ароматы доступны для данного типа товара, а также ответит на интересующие вопросы.'
-                                            '\n'
-                                            '\n<u>Фотографии из каталога являются исключительно ознакомительными. Мы не гарантируем 100% повторения изделия с фото, т.к. каждое изделие изготавливается вручную "с нуля".</u>', parse_mode='html', reply_markup=markup).message_id))
-    img_zakaz.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-@bot.message_handler(commands=['socseti'])
-def socseti(message): #Кнопки с соц.сетями в 2-м уровне меню
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_VK = types.InlineKeyboardButton (text='Группа VK', url='https://vk.com/elenitsa_custom') #Кнопка VK
-    btn_Instagram = types.InlineKeyboardButton (text= 'Instagram' , url= 'https://instagram.com/craft_studio_art') #Кнопка Instagram
-    btn_TG = types.InlineKeyboardButton (text= 'Наш канал в Telegram', url= 'http://t.me/craft_studio_art') #Кнопка Telegram
-    btn_WA = types.InlineKeyboardButton (text= 'WhatsApp', url='https://wa.me/79186365539') #Кнопка WhatsApp
-    btn_Nazad = types.InlineKeyboardButton (text= 'Назад', callback_data='help')
-    btn_raboty = types.InlineKeyboardButton('Примеры работ на Я.Диск', url='https://disk.yandex.ru/d/Fg1AHRy9DQPQhQ')
-    btn_Telega = types.InlineKeyboardButton(text='Telegram', url='https://t.me/elenitsa17')
-    btn_support = types.InlineKeyboardButton(text='Тех. поддержка БОТА', url='https://t.me/HarisNvrsk')
-    markup.row(btn_Instagram, btn_VK)
-    markup.row(btn_Telega, btn_WA)
-    markup.row(btn_TG)
-    markup.row(btn_raboty)
+    markup.row(btn_inst, btn_vk)
+    markup.row(btn_tg_dm, btn_wa)
+    markup.row(btn_tg_channel)
+    markup.row(btn_ya_disk)
     markup.row(btn_support)
-    markup.row(btn_Nazad)
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, f'<b>Какая <u>соц.сеть</u>, вас интересует:</b>', parse_mode='html', reply_markup=markup).message_id))
+    markup.row(btn_back)
 
-    UsersBD.commit()
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                   ' VALUES (?, ?)',
+                   (message.chat.id,
+                    Bot.send_message(
+                        message.chat.id,
+                        f'<b>Какая <u>соц.сеть</u>, вас интересует:</b>',
+                        parse_mode='html',
+                        reply_markup=markup).message_id)
+                   )
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
-#Начало описания направлений
-def Smola(message): #Описание занятия по смоле в студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+
+def epoxy(message):  # Описание занятия по смоле в студии
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_Smola = open('Smola_img.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id,img_Smola , caption=f'<b>Эпоксидная смола</b> - это универсальный материал, который позволяет создавать разнообразные изделия и декоративные элементы.'
-                                                    f'\n'
-                                                    f'\n На нашем занятии вы научитесь основам заливки. Мы покажем вам различные техники, а также расскажем о тонкостях при работе со смолой. Вы сможете создать свои уникальные и неповторимые изделия из смолы.'
-                                                    f'\n'
-                                                    f'\n Смола застывает в течении 24 часов. Своё изделие вы сможете забрать уже на следующий день. После отвердевания, смола становится безвредной и может контактировать с холодными продуктами (орешки, сухофрукты, конфеты и прочее).'
-                                                    f'\n'
-                                                    f'\n Мы обеспечим вам необходимую защитную экипировку: перчатки, респираторы и фартуки. Занятия проводятся в хорошо проветриваемом помещении.'
-                                                    f'\n'
-                                                    f'\n<b>Стоимость:</b> от 700\U000020BD за изделие'
-                                                    f'\n'
-                                                    f'\n<u>Уточняйте актуальное расписание, перечень изделий и наличие мест у мастера!</u>',parse_mode='html', reply_markup=markup).message_id))
-    img_Smola.close()
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data='directions')
 
-    UsersBD.commit()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Записаться на МК \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/epoxy_img.png', 'rb') as img_epoxy:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_epoxy,
+                            caption=f'<b>Эпоксидная смола</b> - это '
+                                    f'универсальный '
+                                    f'материал, который позволяет '
+                                    f'создавать разнообразные изделия и '
+                                    f'декоративные элементы.'
+                                    f'\n'
+                                    f'\n На нашем занятии вы '
+                                    f'научитесь основам '
+                                    f'заливки. Мы покажем вам '
+                                    f'различные техники, '
+                                    f'а также расскажем о тонкостях '
+                                    f'при работе '
+                                    f'со смолой. Вы сможете создать свои '
+                                    f'уникальные и неповторимые '
+                                    f'изделия из смолы.'
+                                    f'\n'
+                                    f'\n Смола застывает в течении 24 часов. '
+                                    f'Своё изделие вы сможете забрать уже на '
+                                    f'следующий день. После отвердевания, '
+                                    f'смола становится безвредной и может '
+                                    f'контактировать с холодными продуктами '
+                                    f'(орешки, сухофрукты, конфеты и прочее).'
+                                    f'\n'
+                                    f'\n Мы обеспечим вам '
+                                    f'необходимую защитную '
+                                    f'экипировку: перчатки, респираторы и '
+                                    f'фартуки. Занятия проводятся в хорошо '
+                                    f'проветриваемом помещении.'
+                                    f'\n'
+                                    f'\n<b>Стоимость:</b> от 700\U000020BD '
+                                    f'за изделие'
+                                    f'\n'
+                                    f'\n<u>Уточняйте актуальное расписание, '
+                                    f'перечень изделий и наличие '
+                                    f'мест у мастера!</u>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def Gips(message): #Описание занятия по Гипсу в студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def gips_info(message, offsite=False):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    if offsite:
+        btn_text = '\U000026A1 Забронировать МК \U000026A1'
+        additional_info = ('<u>Минимальное количество человек и стоимость '
+                           'выезда на локацию проведения уточняйте у '
+                           'мастера!</u>')
+        callback_data = 'directions_offsite'
+    else:
+        btn_text = '\U000026A1 Записаться на МК \U000026A1'
+        additional_info = ('<u>Уточняйте актуальное расписание'
+                           ' и наличие мест у мастера!</u>')
+        callback_data = 'directions'
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_Gips = open('Gips_img.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id,img_Gips ,caption=f'<b>Гипс</b> - это универсальный и простой в работе материал, из которого можно создавать различные предметы декора и подарки. '
-                                                     f'\n'
-                                                     f'\n  На нашем занятии вы познакомитесь с основами литья из гипса и узнаете, как изготавливать гипсовые изделия своими руками. Мы научим вас правильно замешивать гипсовый раствор, расскажем о секретах получения крепкого, ровного изделия с минимальным количеством пузырей. '
-                                                     f'\n'
-                                                     f'\n  Вы сможете создать свои неповторимые изделия и украсить дом. Так же гипсовые изделия – это отличный подарок, сделанный своими руками.'
-                                                     f'\n'
-                                                     f'\n<b>Стоимость:</b> от 500\U000020BD за человека'
-                                                     f'\n'
-                                                     f'\n<u>Уточняйте актуальное расписание и наличие мест у мастера!</u>',parse_mode='html', reply_markup=markup).message_id))
-    img_Gips.close()
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data=callback_data)
+    btn_tg_dm = types.InlineKeyboardButton(text=btn_text,
+                                           url='https://t.me/elenitsa17')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
 
-    UsersBD.commit()
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/gips_img.png', 'rb') as img_gips:
+        caption = (f'<b>Гипс</b> - это универсальный '
+                   f'и простой в работе материал, '
+                   f'из которого можно создавать различные предметы декора и '
+                   f'подарки.\n\nНа нашем занятии вы познакомитесь с основами '
+                   f'литья из гипса и узнаете, как изготавливать гипсовые '
+                   f'изделия своими руками. '
+                   f'Мы научим вас правильно замешивать '
+                   f'гипсовый раствор, расскажем '
+                   f'о секретах получения крепкого, '
+                   f'ровного изделия с минимальным количеством пузырей.\n\nВы '
+                   f'сможете создать свои неповторимые '
+                   f'изделия и украсить дом. '
+                   f'Так же гипсовые изделия – это '
+                   f'отличный подарок, сделанный '
+                   f'своими руками.\n\n<b>Стоимость:</b> от 500\U000020BD за '
+                   f'человека\n\n{additional_info}')
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_gips,
+                            caption=caption,
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def Gips_2(message): #Описание занятия по Гипсу на выезд
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def sketching(message):  # Описание занятия по Скетчингу в студии
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya_2')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Забронировать МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_Gips = open('Gips_img.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id,img_Gips ,caption=f'<b>Гипс</b> - это универсальный и простой в работе материал, из которого можно создавать различные предметы декора и подарки. '
-                                                     f'\n'
-                                                     f'\n  На нашем занятии вы познакомитесь с основами литья из гипса и узнаете, как изготавливать гипсовые изделия своими руками. Мы научим вас правильно замешивать гипсовый раствор, расскажем о секретах получения крепкого, ровного изделия с минимальным количеством пузырей. '
-                                                     f'\n'
-                                                     f'\n  Вы сможете создать свои неповторимые изделия и украсить дом. Так же гипсовые изделия – это отличный подарок, сделанный своими руками.'
-                                                     f'\n'
-                                                     f'\n<b>Стоимость:</b> от 600\U000020BD за человека'
-                                                     f'\n'
-                                                     f'\n<u>Минимальное количество человек и стоимость выезда на локацию проведения уточняйте у мастера!</u>',parse_mode='html', reply_markup=markup).message_id))
-    img_Gips.close()
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data='directions')
 
-    UsersBD.commit()
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Записаться на МК \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/sketching_img.png',
+              'rb') as img_sketching:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_sketching,
+                            caption='<b>Скетчинг</b> - это техника быстрого '
+                                    'рисования набросков и эскизов, которая '
+                                    'помогает визуализировать идеи, эмоции и '
+                                    'впечатления. На нашем '
+                                    'занятии вы узнаете, '
+                                    'как рисовать скетчи от '
+                                    'руки с помощью разных '
+                                    'материалов: карандашей, '
+                                    'маркеров, пастели. '
+                                    '\n'
+                                    '\n  Вы научитесь выбирать '
+                                    'подходящие объекты '
+                                    'для скетчинга, определять перспективу и '
+                                    'светотень, создавать '
+                                    'композицию и цветовую '
+                                    'гамму. Мы покажем вам различные стили и '
+                                    'техники скетчинга. '
+                                    '\n'
+                                    '\n  Вы сможете создать свои уникальные '
+                                    'скетчи на любые темы: '
+                                    'природа, архитектура, '
+                                    'мода и многое другое.'
+                                    '\n'
+                                    '\n<b>Стоимость:</b> от 600\U000020BD '
+                                    'за человека'
+                                    '\n'
+                                    '\n<u>Уточняйте актуальное расписание '
+                                    'и наличие мест у мастера!</u>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def Sketching(message): #Описание занятия по Скетчингу в студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def tie_dye_info(message, offsite=False):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    if offsite:
+        btn_text = '\U000026A1 Забронировать МК \U000026A1'
+        additional_info = ('<u>Минимальное количество человек и стоимость '
+                           'выезда на локацию проведения уточняйте у '
+                           'мастера!</u>')
+        callback_data = 'directions_offsite'
+    else:
+        btn_text = '\U000026A1 Записаться на МК \U000026A1'
+        additional_info = ('<u>Уточняйте актуальное расписание'
+                           ' и наличие мест у мастера!</u>')
+        callback_data = 'directions'
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_Sketching = open('Sketching_img.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_Sketching, caption='<b>Скетчинг</b> - это техника быстрого рисования набросков и эскизов, которая помогает визуализировать идеи, эмоции и впечатления. На нашем занятии вы узнаете, как рисовать скетчи от руки с помощью разных материалов: карандашей, маркеров, пастели. '
-                                                           '\n'
-                                                           '\n  Вы научитесь выбирать подходящие объекты для скетчинга, определять перспективу и светотень, создавать композицию и цветовую гамму. Мы покажем вам различные стили и техники скетчинга. '
-                                                           '\n'
-                                                           '\n  Вы сможете создать свои уникальные скетчи на любые темы: природа, архитектура, мода и многое другое.'
-                                                           '\n'
-                                                           '\n<b>Стоимость:</b> от 600\U000020BD за человека'
-                                                           '\n'
-                                                           '\n<u>Уточняйте актуальное расписание и наличие мест у мастера!</u>',parse_mode='html', reply_markup=markup).message_id))
-    img_Sketching.close()
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data=callback_data)
+    btn_tg_dm = types.InlineKeyboardButton(text=btn_text,
+                                           url='https://t.me/elenitsa17')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
 
-    UsersBD.commit()
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/tie_dye_photo.png', 'rb') as img_tie_dye:
+        caption = (f'<b>Тай-дай</b> - это техника '
+                   f'окрашивания ткани при помощи '
+                   f'скручивания, которая позволяет '
+                   f'создавать яркие и '
+                   f'оригинальные узоры. На нашем '
+                   f'занятии вы узнаете, как делать '
+                   f'тай-дай своими руками. Вы научитесь выбирать подходящие '
+                   f'красители и способы завязывания '
+                   f'ткани для получения разных '
+                   f'эффектов.\n\nМы покажем вам различные стили и техники '
+                   f'тай-дай: от классического спирального до современного '
+                   f'мраморного. Вы сможете создать '
+                   f'свои уникальные вещи в стиле '
+                   f'тай-дай: футболки, платья, джинсы, шопперы и '
+                   f'другое.\n\n<b>А также при помощи тай-дай можно подарить '
+                   f'вторую жизнь своей любимой '
+                   f'вещи.</b>\n\n<b>Стоимость:</b>\nот 500\U000020BD за '
+                   f'человека, без предоставления '
+                   f'футболки\nот 900\U000020BD за '
+                   f'человека, с предоставлением '
+                   f'футболки\n\n{additional_info}')
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_tie_dye,
+                            caption=caption,
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def TieDye(message): #Описание занятия по Тай-Дай
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def custom_cloth(message):  # Описание занятия по Кастому одежды в студии
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_TieDye = open('TieDye_photo.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_TieDye, caption=f'<b>Тай-дай</b> - это техника окрашивания ткани при помощи скручивания, которая позволяет создавать яркие и оригинальные узоры. На нашем занятии вы узнаете, как делать тай-дай своими руками. Вы научитесь выбирать подходящие красители и способы завязывания ткани для получения разных эффектов. '
-                                                        f'\n'
-                                                        f'\n  Мы покажем вам различные стили и техники тай-дай: от классического спирального до современного мраморного. Вы сможете создать свои уникальные вещи в стиле тай-дай: футболки, платья, джинсы, шопперы и другое. '
-                                                        f'\n'
-                                                        f'\n<b>А также при помощи тай-дай можно подарить вторую жизнь своей любимой вещи.</b>'
-                                                        f'\n'
-                                                        f'\n<b>Стоимость:</b>'
-                                                        f'\nот 500\U000020BD за человека, без предоставления футболки'
-                                                        f'\nот 900\U000020BD за человека, с предоставлением футболки'
-                                                        f'\n'
-                                                        f'\n<u>Уточняйте актуальное расписание и наличие мест у мастера!</u>', parse_mode='html', reply_markup=markup).message_id))
-    img_TieDye.close()
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data='directions')
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Записаться на МК \U000026A1',
+        url='https://t.me/elenitsa17')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
 
-    UsersBD.commit()
+    with open('studio_and_directions/custom_cloth_img.png',
+              'rb') as img_custom_cloth:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_custom_cloth,
+                            caption='<b>Роспись одежды</b> - это творческий '
+                                    'способ преобразить свои '
+                                    'вещи и сделать их '
+                                    'уникальными. На нашем '
+                                    'занятии вы узнаете, '
+                                    'как рисовать на ткани акриловыми '
+                                    'красками и какие материалы, инструменты '
+                                    'для этого нужны. '
+                                    '\n'
+                                    '\n  Вы научитесь выбирать '
+                                    'подходящие рисунки '
+                                    'и узоры, переносить их '
+                                    'на одежду, а также '
+                                    'использовать разные техники: от простых '
+                                    'надписей, до полноценных картин. '
+                                    'Мы покажем '
+                                    'вам различные стили росписи: '
+                                    'от классических '
+                                    'цветочных мотивов до '
+                                    'современных абстрактных '
+                                    'рисунков. Вы сможете '
+                                    'разрисовать свою одежду '
+                                    'в соответствии со своим вкусом и стилем. '
+                                    '\n'
+                                    '\n  Мы используем специальные краски, '
+                                    'которые не смываются с ткани. Поэтому '
+                                    'расписанная вещь будет радовать '
+                                    'вас очень долго.'
+                                    '\n'
+                                    '\n<b>Стоимость:</b>'
+                                    '\nРоспись футболки (футболка не входит) '
+                                    '- от 1000\U000020BD/шт'
+                                    '\nРоспись шоппера (шоппер предоставим) '
+                                    '- от 1500\U000020BD/шт'
+                                    '\n'
+                                    '\n<u>Уточняйте актуальное расписание '
+                                    'и наличие мест у мастера!</u>',
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def TieDye_2(message): #Описание занятия по Тай-Дай на выезд
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+def candles_info(message, offsite=False):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+
+    if offsite:
+        btn_text = '\U000026A1 Забронировать МК \U000026A1'
+        additional_info = ('<u>Минимальное количество человек и стоимость '
+                           'выезда на локацию проведения уточняйте у '
+                           'мастера!</u>')
+        callback_data = 'directions_offsite'
+    else:
+        btn_text = '\U000026A1 Записаться на МК \U000026A1'
+        additional_info = ('<u>Уточняйте актуальное расписание и '
+                           'наличие мест у мастера!</u>')
+        callback_data = 'directions'
 
     markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya_2')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Забронировать МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_TieDye = open('TieDye_photo.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_TieDye, caption=f'<b>Тай-дай</b> - это техника окрашивания ткани при помощи скручивания, которая позволяет создавать яркие и оригинальные узоры. На нашем занятии вы узнаете, как делать тай-дай своими руками. Вы научитесь выбирать подходящие красители и способы завязывания ткани для получения разных эффектов. '
-                                                        f'\n'
-                                                        f'\n  Мы покажем вам различные стили и техники тай-дай: от классического спирального до современного мраморного. Вы сможете создать свои уникальные вещи в стиле тай-дай: футболки, платья, джинсы, шопперы и другое. '
-                                                        f'\n'
-                                                        f'\nА также при помощи тай-дай можно подарить вторую жизнь своей любимой вещи.'
-                                                        f'\n'
-                                                        f'\n<b>Стоимость:</b>'
-                                                        f'\nот 500\U000020BD за человека, без предоставления футболки'
-                                                        f'\nот 900\U000020BD за человека, с предоставлением футболки'
-                                                        f'\n'
-                                                        f'\n<u>Минимальное количество человек и стоимость выезда на локацию проведения уточняйте у мастера!</u>', parse_mode='html', reply_markup=markup).message_id))
-    img_TieDye.close()
+    btn_back = types.InlineKeyboardButton(text='Назад',
+                                          callback_data=callback_data)
+    btn_tg_dm = types.InlineKeyboardButton(text=btn_text,
+                                           url='https://t.me/elenitsa17')
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
 
-    UsersBD.commit()
+    Bot.delete_message(message.chat.id, message.id)
+    time.sleep(DEL_TIME)
+
+    with open('studio_and_directions/candles_photo.png', 'rb') as img_candles:
+        caption = (f'<b>Ароматические свечи</b> - это не '
+                   f'только красивый и уютный '
+                   f'элемент декора, но и способ создать особую атмосферу в '
+                   f'доме.\n\nНа нашем занятии вы '
+                   f'создадите свечу своими руками '
+                   f'из натуральных ингредиентов: '
+                   f'соевого воска, эфирных масел, '
+                   f'хлопкового или деревянного фитиля. Вы сможете выбрать '
+                   f'ароматы по своему вкусу (более 20 различных ароматов), '
+                   f'украсить свечу сухоцветами, шиммером. Мы расскажем вам о '
+                   f'тонкостях процесса изготовления свечей, а также о том, '
+                   f'как правильно использовать и '
+                   f'хранить их.\n\nВы получите не '
+                   f'только полезные знания и навыки, но и удовольствие от '
+                   f'творчества и релаксации.'
+                   f'\n\nПо окончании занятия вы сможете '
+                   f'забрать с собой свои уникальные '
+                   f'аромасвечи и украсить свой '
+                   f'дом, или подарить близкому '
+                   f'человеку.\n\n<b>Стоимость:</b>\nСвеча в кокосе - '
+                   f'1000\U000020BD/шт'
+                   f'\nСвеча 50мл – 500\U000020BD/шт\nСвеча в '
+                   f'баночке 120мл – 800\U000020BD/шт\nСвеча в банке 200 мл – '
+                   f'900\U000020BD/шт\nСвеча в банке 250мл – '
+                   f'1200\U000020BD/шт\n\n{additional_info}')
+
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_photo(
+                            message.chat.id,
+                            img_candles,
+                            caption=caption,
+                            parse_mode='html',
+                            reply_markup=markup).message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-def CustomCloth(message): #Описание занятия по Кастому одежды в студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
+@Bot.message_handler(content_types=['text'])
+@check_bd_chat_id
+def message_input_text(message):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
 
-    markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_CustomCloth = open('CustomCloth_img.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_CustomCloth, caption='<b>Роспись одежды</b> - это творческий способ преобразить свои вещи и сделать их уникальными. На нашем занятии вы узнаете, как рисовать на ткани акриловыми красками и какие материалы, инструменты для этого нужны. '
-                                                             '\n'
-                                                             '\n  Вы научитесь выбирать подходящие рисунки и узоры, переносить их на одежду, а также использовать разные техники: от простых надписей, до полноценных картин. Мы покажем вам различные стили росписи: от классических цветочных мотивов до современных абстрактных рисунков. Вы сможете разрисовать свою одежду в соответствии со своим вкусом и стилем. '
-                                                             '\n'
-                                                             '\n  Мы используем специальные краски, которые не смываются с ткани. Поэтому расписанная вещь будет радовать вас очень долго.'
-                                                             '\n'
-                                                             '\n<b>Стоимость:</b>'
-                                                             '\nРоспись футболки (футболку не предоставляем) - от 1000\U000020BD/шт'
-                                                             '\nРоспись шоппера (шоппер предоставим) - от 1500\U000020BD/шт'
-                                                             '\n'
-                                                             '\n<u>Уточняйте актуальное расписание и наличие мест у мастера!</u>', parse_mode='html', reply_markup=markup).message_id))
-    img_CustomCloth.close()
+    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                   ' VALUES (?, ?)',
+                   (message.chat.id,
+                    message.message_id))
+    users_db.commit()
 
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def Svechi(message): #Описание занятия по Свечеварению в студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Записаться на МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_svechi = open('Svechi_photo.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_svechi, caption=f'\n  <b>Ароматические свечи</b> - это не только красивый и уютный элемент декора, но и способ создать особую атмосферу в доме. '
-                                                        f'\n'
-                                                        f'\n  На нашем занятии вы создадите свечу своими руками из натуральных ингредиентов: соевого воска, эфирных масел, хлопкового или деревянного фитиля. Вы сможете выбрать ароматы по своему вкусу (более 20 различных ароматов), украсить свечу сухоцветами, шиммером. Мы расскажем вам о тонкостях процесса изготовления свечей, а также о том, как правильно использовать и хранить их. '
-                                                        f'\n'
-                                                        f'\n  Вы получите не только полезные знания и навыки, но и удовольствие от творчества и релаксации. '
-                                                        f'\n'
-                                                        f'\n  По окончании занятия вы сможете забрать с собой свои уникальные аромасвечи и украсить свой дом, или подарить близкому человеку.'
-                                                        f'\n'
-                                                        f'\n<b>Стоимость:</b>'
-                                                        f'\nСвеча в кокосе - 1000\U000020BD/шт'
-                                                        f'\nСвеча 50мл – 500\U000020BD/шт'
-                                                        f'\nСвеча в баночке 120мл – 800\U000020BD/шт'
-                                                        f'\nСвеча в банке 200 мл – 900\U000020BD/шт'
-                                                        f'\nСвеча в банке 250мл – 1200\U000020BD/шт'
-                                                        f'\n'
-                                                        f'<u>Уточняйте актуальное расписание и наличие мест у мастера!</u>',parse_mode='html', reply_markup=markup).message_id))
-    img_svechi.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-def Svechi_2(message): #Описание занятия по Свечеварению в студии
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    markup = types.InlineKeyboardMarkup()
-    btn_Nazad = types.InlineKeyboardButton(text='Назад', callback_data='napravleniya_2')
-    btn_bronirovanie = types.InlineKeyboardButton(text='\U000026A1 Забронировать МК \U000026A1', url='https://t.me/elenitsa17')
-    markup.row(btn_bronirovanie)
-    markup.row(btn_Nazad)
-    img_svechi = open('Svechi_photo.png', 'rb')
-    bot.delete_message(message.chat.id, message.id)
-    time.sleep(del_time)
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_photo(message.chat.id, img_svechi, caption=f'\n  <b>Ароматические свечи</b> - это не только красивый и уютный элемент декора, но и способ создать особую атмосферу в доме. '
-                                                        f'\n'
-                                                        f'\n  На нашем занятии вы создадите свечу своими руками из натуральных ингредиентов: соевого воска, эфирных масел, хлопкового или деревянного фитиля. Вы сможете выбрать ароматы по своему вкусу (более 20 различных ароматов), украсить свечу сухоцветами, шиммером. Мы расскажем вам о тонкостях процесса изготовления свечей, а также о том, как правильно использовать и хранить их. '
-                                                        f'\n'
-                                                        f'\n  Вы получите не только полезные знания и навыки, но и удовольствие от творчества и релаксации. '
-                                                        f'\n'
-                                                        f'\n  По окончании занятия вы сможете забрать с собой свои уникальные аромасвечи и украсить свой дом, или подарить близкому человеку.'
-                                                        f'\n'
-                                                        f'\n<b>Стоимость:</b>'
-                                                        f'\nСвеча в кокосе - 1000\U000020BD/шт'
-                                                        f'\nСвеча 50мл – 500\U000020BD/шт'
-                                                        f'\nСвеча в баночке 120мл – 800\U000020BD/шт'
-                                                        f'\nСвеча в банке 200 мл – 900\U000020BD/шт'
-                                                        f'\nСвеча в банке 250мл – 1200\U000020BD/шт'
-                                                        f'\n'
-                                                        f'\n<u>Минимальное количество человек и стоимость выезда на локацию проведения уточняйте у мастера!</u>',parse_mode='html', reply_markup=markup).message_id))
-    img_svechi.close()
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-#Конец описания направлений
-
-
-def chepuha(message): #Обработка чепухи и направление на помощь
-    user = message.from_user.first_name  # Имя пользователя в базе SQL
-    chat_id = message.chat.id  # ID чата с пользователем в базе SQL
-    user_id = message.from_user.id  # ID пользователя в базе SQL
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-    cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?", (chat_id,))
-    user_name = cursor.fetchone()[0]
-
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, bot.send_message(message.chat.id, text=f'Извините {user_name}, я вас не понимаю. '
-                                           f'\n'
-                                           f'\nПопробуйте написать /help для возврата в главное меню или воспользуйтесь кнопкой "Меню" около окна ввода сообщения').message_id))
-
-    UsersBD.commit()
-    cursor.close()
-    UsersBD.close()
-
-
-@bot.message_handler(content_types=['text']) #Стоит в конце, т.к. должен исполняться последним, чтобы не было конфликтов
-def easter_eggs(message): #Пасхалки
-    UsersBD = sqlite3.connect('UsersDB.sql')  # База данных SQL с ID и Именем пользователя
-    cursor = UsersBD.cursor()
-
-    cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (message.chat.id, message.message_id)) #Сохранение id сообщения от пользователя
-    UsersBD.commit()
-
-    try:
-        if message.text.lower() == 'акуна':  # Пасхалка король лев_1
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                           (message.chat.id, bot.send_message(message.chat.id,
-                                                              text='Матата!').message_id))
-        elif message.text.lower() == 'матата':  # Пасхалка король лев_2
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                           (message.chat.id, bot.send_message(message.chat.id,
-                                                              text='Акуна!').message_id))
-        elif message.text.lower() == 'матата акуна':  # Пасхалка король лев_3
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                           (message.chat.id, bot.send_message(message.chat.id,
-                                                              text='\U0001F417 \U0001F439').message_id))
-        elif message.text.lower() == 'акуна матата':  # Пасхалка король лев_4
-            img_akuna = open('Akuna.jpg', 'rb')
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
+    if message.text.lower() == 'акуна':
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_message(message.chat.id,
+                                         text='Матата!').message_id))
+        users_db.commit()
+        cursor.close()
+        users_db.close()
+    elif message.text.lower() == 'матата':
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_message(message.chat.id,
+                                         text='Акуна!').message_id))
+        users_db.commit()
+        cursor.close()
+        users_db.close()
+    elif 'матата акуна' in message.text.lower():
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_message(message.chat.id,
+                                         text='\U0001F417 \U0001F439'
+                                         ).message_id))
+        users_db.commit()
+        cursor.close()
+        users_db.close()
+    elif 'акуна матата' in message.text.lower():
+        with open('easter_eggs/Akuna.jpg', 'rb') as img_akuna:
+            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                           ' VALUES (?, ?)',
                            (message.chat.id,
-                            bot.send_photo(message.chat.id, img_akuna,
+                            Bot.send_photo(message.chat.id, img_akuna,
                                            caption=f'<b>Акуна Матата!</b>',
                                            parse_mode='html').message_id))
-            img_akuna.close()
-        elif message.text == '\U0001F346':  # Пасхалка бот_пик
-            img_bolt = open('bolt.png', 'rb')
-            cursor.execute('INSERT INTO message_ids VALUES (?, ?)',
-                           (message.chat.id, bot.send_photo(message.chat.id,
-                                                            img_bolt).message_id))
-            img_bolt.close()
-        else:
-            chepuha(message)
-        UsersBD.commit()
-    except:
-        cursor.execute('INSERT INTO message_ids VALUES (?, ?)', (
-            message.chat.id, bot.send_message(message.chat.id,
-                                              f'<b>Извините, <u>{message.from_user.first_name}</u>! \U0001F642</b>'
-                                              f'\nЯ вас не понимаю, пожалуйста напишите /start',
-                                              parse_mode='html').message_id))
+            users_db.commit()
+            cursor.close()
+            users_db.close()
+    elif message.text == '\U0001F346':
+        with open('easter_eggs/bolt.png', 'rb') as img_bolt:
+            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                           ' VALUES (?, ?)',
+                           (message.chat.id,
+                            Bot.send_photo(message.chat.id,
+                                           img_bolt).message_id))
+            users_db.commit()
+            cursor.close()
+            users_db.close()
+    elif 'hello world' in message.text.lower():
+        with open('easter_eggs/Hello-World.jpeg', 'rb') as HW_img:
+            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                           ' VALUES (?, ?)',
+                           (message.chat.id,
+                            Bot.send_photo(message.chat.id,
+                                           HW_img).message_id))
+            users_db.commit()
+            cursor.close()
+            users_db.close()
+    else:
+        chepuha(message)
 
+
+def chepuha(message, debug: bool = False):
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+    user_name = message.chat.first_name
+
+    if not debug:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_message(
+                            message.chat.id,
+                            text=f'Извините <u>{user_name}</u>, '
+                                 f'я вас не понимаю. '
+                                 f'\n'
+                                 f'\nПопробуйте написать '
+                                 f'/help для возврата в '
+                                 f'главное меню или воспользуйтесь '
+                                 f'кнопкой "Меню" '
+                                 f'около окна ввода сообщения',
+                            parse_mode='html').message_id))
+    else:
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        message.message_id))
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id,
+                        Bot.send_message(
+                            message.chat.id,
+                            text=f'Извините <u>{user_name}</u>, похоже '
+                                 f'вы у нас впервые!'
+                                 f'\n'
+                                 f'\nПожалуйста, напишите /start для вызова '
+                                 f'главного меню',
+                            parse_mode='html').message_id))
+
+    users_db.commit()
     cursor.close()
-    UsersBD.close()
+    users_db.close()
 
 
-@bot.callback_query_handler(func=lambda callback: True) #Обработка функции callback
-def buttons(callback):
-    if callback.data == 'help': # Все кнопки "назад", которые возвращают в 1-й уровень меню из 2-го
-        bot.answer_callback_query(callback.id)
-        start(callback.message)
-    elif callback.data == 'clean': # Очистка чата_вопрос
-        bot.answer_callback_query(callback.id)
-        clean(callback.message)
-    elif callback.data == 'delete_message': # Очистка чата_действие
-        bot.answer_callback_query(callback.id)
-        delete_message(callback.message)
-    elif callback.data == 'admin': # Админская кнопка
-        bot.answer_callback_query(callback.id)
-        admin(callback.message)
-    elif callback.data == 'another_proportion': # Пропорции
-        bot.answer_callback_query(callback.id)
-        proportions(callback.message, 1)
-    elif callback.data == 'socseti': # Кнопка "Ссылки на наши профили в соц.сетях" в 1-м уровне меню
-        bot.answer_callback_query(callback.id)
-        socseti(callback.message)
-    elif callback.data == 'tarot': # Таро
-        bot.answer_callback_query(callback.id)
-        tarot_start(callback.message)
-    elif callback.data == 'napravleniya': # Кнопка с выбором направлений из вклдаки "Подробнее о студии и направлениях"
-        bot.answer_callback_query(callback.id)
-        napravleniya(callback.message)
-    elif callback.data == 'napravleniya_2': # Кнопка с выбором направлений из вклдаки "Выездные мастер-классы"
-        bot.answer_callback_query(callback.id)
-        napravleniya_2(callback.message)
-    elif callback.data == 'studia': # Кнопка "Подробнее о студии и направлениях" в 1-м уровне меню
-        bot.answer_callback_query(callback.id)
-        studia(callback.message)
-    elif callback.data == 'Smola': # Кнопка "Эпоксидная смола" в направлениях студии
-        bot.answer_callback_query(callback.id)
-        Smola(callback.message)
-    elif callback.data == 'Gips': # Кнопка "Гипс" в направлениях студии
-        bot.answer_callback_query(callback.id)
-        Gips(callback.message)
-    elif callback.data == 'Gips_2': # Кнопка "Гипс" в направлениях выездных МК
-        bot.answer_callback_query(callback.id)
-        Gips_2(callback.message)
-    elif callback.data == 'Sketching': # Кнопка "Скетчинг" в направлениях студии
-        bot.answer_callback_query(callback.id)
-        Sketching(callback.message)
-    elif callback.data == 'TieDye': # Кнопка "Тай-Дай" в направлениях студии
-        bot.answer_callback_query(callback.id)
-        TieDye(callback.message)
-    elif callback.data == 'TieDye_2': # Кнопка "Тай-Дай" в направлениях выездных МК
-        bot.answer_callback_query(callback.id)
-        TieDye_2(callback.message)
-    elif callback.data == 'CustomCloth': # Кнопка "Роспись одежды" в направлениях студии
-        bot.answer_callback_query(callback.id)
-        CustomCloth(callback.message)
-    elif callback.data == 'Svechi': # Кнопка "Свечеварение" в направлениях студии
-        bot.answer_callback_query(callback.id)
-        Svechi(callback.message)
-    elif callback.data == 'Svechi_2': # Кнопка "Свечеварение" в направлениях выездных МК
-        bot.answer_callback_query(callback.id)
-        Svechi_2(callback.message)
-    elif callback.data == 'shop': # Кнопка "Магазин" в 1-м уровне меню
-        bot.answer_callback_query(callback.id)
-        shop(callback.message)
-    elif callback.data == 'catalog_main': # Кнопка "Каталог" во вкладке магазина
-        bot.answer_callback_query(callback.id)
-        catalog_main(callback.message)
-    elif callback.data == 'catalog_1': # Страница 1 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_1(callback.message)
-    elif callback.data == 'catalog_2': # Страница 2 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_2(callback.message)
-    elif callback.data == 'catalog_3': # Страница 3 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_3(callback.message)
-    elif callback.data == 'catalog_4': # Страница 4 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_4(callback.message)
-    elif callback.data == 'catalog_5': # Страница 5 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_5(callback.message)
-    elif callback.data == 'catalog_6': # Страница 6 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_6(callback.message)
-    elif callback.data == 'catalog_7': # Страница 7 в каталоге
-        bot.answer_callback_query(callback.id)
-        catalog_7(callback.message)
-    elif callback.data == 'oplata': # Кнопка "Оплата" в меню Магазина
-        bot.answer_callback_query(callback.id)
-        oplata(callback.message)
-    elif callback.data == 'dostavka': # Кнопка "О доставке" в меню Магазина
-        bot.answer_callback_query(callback.id)
-        dostavka(callback.message)
-    elif callback.data == 'zakaz': # Кнопка "Как заказать" в меню Магазина
-        bot.answer_callback_query(callback.id)
-        zakaz(callback.message)
-    elif callback.data == 'viezd': # Кнопка "Выездные мастер-классы" в 1-м уровне меню
-        bot.answer_callback_query(callback.id)
-        viezd(callback.message)
+@Bot.callback_query_handler(func=lambda callback: True)
+def handle_callback(callback):
+    callback_functions = {
+        'admin': admin,
+        'another_proportion': lambda message: proportions(message, True),
+        'candles': candles_info,
+        'candles_offsite': lambda message: candles_info(message, offsite=True),
+        'clean': clean,
+        'custom_cloth': custom_cloth,
+        'delete_message': delete_message,
+        'directions': directions,
+        'directions_offsite': lambda message: directions(message,
+                                                         offsite=True),
+        'epoxy': epoxy,
+        'gips': gips_info,
+        'gips_offsite': lambda message: gips_info(message, offsite=True),
+        'help': start_help,
+        'offsite_workshops': offsite_workshops,
+        'order': order,
+        'pay': pay,
+        'shipment': shipment,
+        'shop': shop,
+        'sketching': sketching,
+        'soc_profiles': soc_profiles,
+        'studio': studio,
+        'tarot': tarot_start,
+        'tie_dye': tie_dye_info,
+        'tie_dye_offsite': lambda message: tie_dye_info(message, offsite=True)
+    }
+
+    Bot.answer_callback_query(callback.id)
+    callback_functions[callback.data](callback.message)
 
 
-bot.infinity_polling() # Постоянная работа бота
+Bot.infinity_polling()
