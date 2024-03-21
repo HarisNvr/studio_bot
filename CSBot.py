@@ -8,19 +8,24 @@ from datetime import datetime, timedelta
 from telebot import types, TeleBot
 from telebot.apihelper import ApiTelegramException
 
-if sys.platform == 'win32':
-    Bot = TeleBot(
-        '6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
-else:
-    Bot = TeleBot(
-        '6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE')  # @CraftStudioBot
+OS_TYPE = sys.platform
+'''Current OS, python runtime'''
 
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
 ADMIN_IDS = [154395483, 1019826386]
 # [Я (HarisNvrsk), Лена] (154395483 - HarisNvr)
-DEL_TIME = 0.5  # Задержка между сообщениями бота
+
+DEL_TIME = 0.5
+'''Time between deleting old message and sending a new one'''
+
+if OS_TYPE == 'win32':
+    Bot = TeleBot(
+        '6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
+else:
+    Bot = TeleBot(
+        '6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE')  # @CraftStudioBot
 
 
 def morning_routine():
@@ -40,14 +45,14 @@ morning_routine()
 
 
 def check_bd_chat_id(func):
-    '''
+    """
     Decorator to check if a user's chat ID exists in the database.
     If not found, it suggests the user to
     press /start to initialize their chat session.
 
     :param func: The function to be decorated.
     :return: The decorated function.
-    '''
+    """
 
     def wrapper(message, *args):
         users_db = sqlite3.connect('UsersDB.sql')
@@ -63,6 +68,24 @@ def check_bd_chat_id(func):
             return func(message, *args)
         else:
             return chepuha(message, debug=True)
+
+    return wrapper
+
+
+def check_is_admin(func):
+    """
+    Decorator to check if a user is admin
+
+    :param func: The function to be decorated.
+    :return: The decorated function.
+    """
+
+    def wrapper(message, *args):
+        chat_id = message.chat.id
+        if chat_id in ADMIN_IDS:
+            return func(message, *args)
+        else:
+            return chepuha(message)
 
     return wrapper
 
@@ -287,28 +310,25 @@ def admin(message):  # Админское меню
 
 
 @Bot.message_handler(commands=['proportions'])
-@check_bd_chat_id
+@check_is_admin
 def proportions(message, debug: bool = False):
     users_db = sqlite3.connect('UsersDB.sql')
     cursor = users_db.cursor()
 
-    if message.chat.id in ADMIN_IDS:
-        if not debug:
-            Bot.delete_message(message.chat.id, message.id)
-            time.sleep(DEL_TIME)
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)', (
+    if not debug:
+        Bot.delete_message(message.chat.id, message.id)
+        time.sleep(DEL_TIME)
+    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                   ' VALUES (?, ?)', (
+                       message.chat.id,
+                       Bot.send_message(
                            message.chat.id,
-                           Bot.send_message(
-                               message.chat.id,
-                               f'Введите через пробел: '
-                               f'\nПропорции компонентов '
-                               f'<b>A</b> и <b>B</b>, '
-                               f'и общую массу - <b>C</b>',
-                               parse_mode='html').message_id))
-        Bot.register_next_step_handler(message, calculate_proportions)
-    else:
-        chepuha(message)
+                           f'Введите через пробел: '
+                           f'\nПропорции компонентов '
+                           f'<b>A</b> и <b>B</b>, '
+                           f'и общую массу - <b>C</b>',
+                           parse_mode='html').message_id))
+    Bot.register_next_step_handler(message, calculate_proportions)
 
     users_db.commit()
     cursor.close()
@@ -389,33 +409,30 @@ def calculate_proportions(message):
 
 
 @Bot.message_handler(commands=['users'])
-@check_bd_chat_id
+@check_is_admin
 def get_users_count(message):
-    if message.chat.id in ADMIN_IDS:
-        users_db = sqlite3.connect('UsersDB.sql')
-        cursor = users_db.cursor()
-        cursor.execute("SELECT COUNT(username) FROM polzovately")
-        count = cursor.fetchone()[0]
+    users_db = sqlite3.connect('UsersDB.sql')
+    cursor = users_db.cursor()
+    cursor.execute("SELECT COUNT(username) FROM polzovately")
+    count = cursor.fetchone()[0]
 
-        sent_message = Bot.send_message(
-            message.chat.id,
-            f"Количество пользователей в БД: {count}"
-        )
+    sent_message = Bot.send_message(
+        message.chat.id,
+        f"Количество пользователей в БД: {count}"
+    )
 
-        Bot.delete_message(message.chat.id, message.id)
+    Bot.delete_message(message.chat.id, message.id)
 
-        cursor.close()
-        users_db.close()
+    cursor.close()
+    users_db.close()
 
-        time.sleep(3.5)
+    time.sleep(3.5)
 
-        Bot.delete_message(sent_message.chat.id, sent_message.message_id)
-    else:
-        chepuha(message)
+    Bot.delete_message(sent_message.chat.id, sent_message.message_id)
 
 
 @Bot.message_handler(commands=['broadcast'])
-@check_bd_chat_id
+@check_is_admin
 def start_broadcast(message):
     global BROADCAST_ADMIN_ID
 
@@ -427,7 +444,7 @@ def start_broadcast(message):
                                                       callback_data='cancel')
     markup.add(btn_cancel_broadcast)
 
-    if message.chat.id in ADMIN_IDS and BROADCAST_ADMIN_ID is None:
+    if BROADCAST_ADMIN_ID is None:
         BROADCAST_ADMIN_ID = message.from_user.id
         Bot.delete_message(message.chat.id, message.id)
         time.sleep(DEL_TIME)
@@ -440,7 +457,7 @@ def start_broadcast(message):
 
         Bot.register_next_step_handler(message, confirm_broadcast)
 
-    elif message.chat.id in ADMIN_IDS and BROADCAST_ADMIN_ID is not None:
+    else:
         new_message_id = Bot.send_message(
             message.chat.id,
             "Сейчас идёт рассылка другого администратора"
@@ -449,9 +466,6 @@ def start_broadcast(message):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id, new_message_id))
-
-    else:
-        chepuha(message)
 
     users_db.commit()
     cursor.close()
@@ -647,20 +661,17 @@ def tarot_start(message):  # Проверка условий для Таро
 
 
 def tarot_main(message):
-    os_type = sys.platform
     tarot_delay = 1.5  # Задержка между картами Таро
 
-    if os_type == 'win32':
-        path = 'C:/Users/wwwha/PycharmProjects/CraftStudioBot/Tarot'
-        cards = glob.glob(f'{path}/*.jpg')
+    if OS_TYPE == 'win32':
+        path = 'Tarot'
+        char = '\\'
     else:
         path = '/home/CSBot/Tarot'
-        cards = glob.glob(f'{path}/*.jpg')
+        char = '/'
 
     users_db = sqlite3.connect('UsersDB.sql')
     cursor = users_db.cursor()
-
-    user_random_cards = []
 
     cursor.execute(
         'INSERT INTO message_ids (chat_id, message_id)'
@@ -681,42 +692,26 @@ def tarot_main(message):
     users_db.commit()
     time.sleep(tarot_delay)
 
-    if os_type == 'win32':
-        while len(user_random_cards) < 3:
-            card = random.choice(cards)
-            card_num = int(card.split('\\')[-1].split('.')[0])
+    cards = glob.glob(f'{path}/*.jpg')
+    user_random_cards = []
 
-            if (card_num not in
-                    [int(c.split('\\')[-1].split('.')[0]) for c in
+    while len(user_random_cards) < 3:
+        card = random.choice(cards)
+        card_num = int(card.split(char)[-1].split('.')[0])
+
+        if (card_num not in
+                [int(c.split(char)[-1].split('.')[0]) for c in
+                 user_random_cards]):
+
+            if (card_num % 2 == 1 and card_num + 1 not in
+                    [int(c.split(char)[-1].split('.')[0]) for c in
                      user_random_cards]):
+                user_random_cards.append(card)
 
-                if (card_num % 2 == 1 and card_num + 1 not in
-                        [int(c.split('\\')[-1].split('.')[0]) for c in
-                         user_random_cards]):
-                    user_random_cards.append(card)
-
-                elif (card_num % 2 == 0 and card_num - 1 not in
-                      [int(c.split('\\')[-1].split('.')[0]) for c in
-                       user_random_cards]):
-                    user_random_cards.append(card)
-    else:
-        while len(user_random_cards) < 3:
-            card = random.choice(cards)
-            card_num = int(card.split('/')[-1].split('.')[0])
-
-            if (card_num not in
-                    [int(c.split('/')[-1].split('.')[0]) for c in
-                     user_random_cards]):
-
-                if (card_num % 2 == 1 and card_num + 1 not in
-                        [int(c.split('/')[-1].split('.')[0]) for c in
-                         user_random_cards]):
-                    user_random_cards.append(card)
-
-                elif (card_num % 2 == 0 and card_num - 1 not in
-                      [int(c.split('/')[-1].split('.')[0]) for c in
-                       user_random_cards]):
-                    user_random_cards.append(card)
+            elif (card_num % 2 == 0 and card_num - 1 not in
+                  [int(c.split(char)[-1].split('.')[0]) for c in
+                   user_random_cards]):
+                user_random_cards.append(card)
 
     captions = ['Прошлое', 'Настоящее', 'Будущее']
 
@@ -1262,8 +1257,7 @@ def epoxy(message):  # Описание занятия по смоле в сту
                                     f'Своё изделие вы сможете забрать уже на '
                                     f'следующий день. После отвердевания, '
                                     f'смола становится безвредной и может '
-                                    f'контактировать с холодными продуктами '
-                                    f'(орешки, сухофрукты, конфеты и прочее).'
+                                    f'контактировать с холодными продуктами.'
                                     f'\n'
                                     f'\n Мы обеспечим вам '
                                     f'необходимую защитную '
@@ -1271,8 +1265,18 @@ def epoxy(message):  # Описание занятия по смоле в сту
                                     f'фартуки. Занятия проводятся в хорошо '
                                     f'проветриваемом помещении.'
                                     f'\n'
-                                    f'\n<b>Стоимость:</b> от 700\U000020BD '
-                                    f'за изделие'
+                                    f'\n\n<b>Стоимость:</b>'
+                                    f'\nПодстаканник - от 900\U000020BD/шт'
+                                    f'\nПоднос гипсовый - 2000\U000020BD/шт'
+                                    f'\nДеревянный поднос - 2500\U000020BD/шт'
+                                    f'\nКартина смолой - от 2700\U000020BD/шт'
+                                    f'\nПодставка '
+                                    f'“осколок” - 1200\U000020BD/шт'
+                                    f'\nМенажница - от 1500\U000020BD/шт'
+                                    f'\nИгрушки новогодние из '
+                                    f'смолы (3 шт) - 1000\U000020BD/шт'
+                                    f'\nНастенные часы из '
+                                    f'смолы - от 2700\U000020BD/шт'
                                     f'\n'
                                     f'\n<u>Уточняйте актуальное расписание, '
                                     f'перечень изделий и наличие '
@@ -1569,28 +1573,31 @@ def candles_info(message, offsite=False):
         caption = (f'<b>Ароматические свечи</b> - это не '
                    f'только красивый и уютный '
                    f'элемент декора, но и способ создать особую атмосферу в '
-                   f'доме.\n\nНа нашем занятии вы '
-                   f'создадите свечу своими руками '
-                   f'из натуральных ингредиентов: '
-                   f'соевого воска, эфирных масел, '
-                   f'хлопкового или деревянного фитиля. Вы сможете выбрать '
-                   f'ароматы по своему вкусу (более 20 различных ароматов), '
-                   f'украсить свечу сухоцветами, шиммером. Мы расскажем вам о '
+                   f'доме.'
+                   f'\n\nНа нашем занятии вы создадите свечу своими руками '
+                   f'из натуральных ингредиентов: соевого воска, '
+                   f'хлопкового или деревянного фитиля. '
+                   f'Вы сможете выбрать ароматы по своему вкусу '
+                   f'(более 20 различных ароматов). '
+                   f'Мы расскажем вам о '
                    f'тонкостях процесса изготовления свечей, а также о том, '
-                   f'как правильно использовать и '
-                   f'хранить их.\n\nВы получите не '
-                   f'только полезные знания и навыки, но и удовольствие от '
-                   f'творчества и релаксации.'
-                   f'\n\nПо окончании занятия вы сможете '
-                   f'забрать с собой свои уникальные '
-                   f'аромасвечи и украсить свой '
-                   f'дом, или подарить близкому '
-                   f'человеку.\n\n<b>Стоимость:</b>\nСвеча в кокосе - '
-                   f'1000\U000020BD/шт'
-                   f'\nСвеча 50мл – 500\U000020BD/шт\nСвеча в '
-                   f'баночке 120мл – 800\U000020BD/шт\nСвеча в банке 200 мл – '
-                   f'900\U000020BD/шт\nСвеча в банке 250мл – '
-                   f'1200\U000020BD/шт\n\n{additional_info}')
+                   f'как правильно использовать и хранить их.'
+                   f'\n\nВы получите не только полезные знания и навыки, '
+                   f'но и удовольствие от творчества и релаксации.'
+                   f'\n\n<b>Стоимость:</b>'
+                   f'\nСвеча в кокосе - 1500\U000020BD/шт'
+                   f'\nГелевая свеча 200 мл. - 1200\U000020BD/шт'
+                   f'\nБотаническая свеча - 1200\U000020BD/шт'
+                   f'\nСвеча "Десерт" - 1200\U000020BD/шт'
+                   f'\nФормовые свечи - от 900\U000020BD/шт'
+                   f'\nСвечи в деревянном подстаканнике - от 1500\U000020BD/шт'
+                   f'\nСвеча в баночке 50 мл. – 700\U000020BD/шт'
+                   f'\nСвеча в баночке 120 мл. – 1000\U000020BD/шт'
+                   f'\nСвеча в баночке 200 мл. – 1300\U000020BD/шт'
+                   f'\nСвеча в стакане 250 мл. – 1500\U000020BD/шт'
+                   f'\nСвеча в гипсе 100 мл. - 1100\U000020BD/шт'
+                   f'\nСвеча в гипсе 200 мл. - 1500\U000020BD/шт'
+                   f'\n\n{additional_info}')
 
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
