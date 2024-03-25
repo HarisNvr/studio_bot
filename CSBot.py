@@ -1,35 +1,35 @@
-import glob
-import random
-import sqlite3
-import sys
-import time
 from datetime import datetime, timedelta
+from glob import glob
+from random import choice, randint
+from sqlite3 import connect
+from sys import platform
+from time import sleep
 
-from telebot import types, TeleBot
+from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
-
-OS_TYPE = sys.platform
-'''Current OS, python runtime'''
 
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
 ADMIN_IDS = [154395483, 1019826386]
-# [Я (HarisNvrsk), Лена] (154395483 - HarisNvr)
+'''[HarisNvrsk, elenitsa17]'''
 
 DEL_TIME = 0.5
 '''Time between deleting old message and sending a new one'''
 
+OS_TYPE = platform
+'''Current OS, python runtime'''
+
 if OS_TYPE == 'win32':
-    Bot = TeleBot(
+    BOT = TeleBot(
         '6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
 else:
-    Bot = TeleBot(
+    BOT = TeleBot(
         '6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE')  # @CraftStudioBot
 
 
 def morning_routine():
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     threshold = datetime.now() - timedelta(hours=51)
@@ -55,7 +55,7 @@ def check_bd_chat_id(func):
     """
 
     def wrapper(message, *args):
-        users_db = sqlite3.connect('UsersDB.sql')
+        users_db = connect('UsersDB.sql')
         cursor = users_db.cursor()
         chat_id = message.chat.id
 
@@ -90,12 +90,12 @@ def check_is_admin(func):
     return wrapper
 
 
-@Bot.message_handler(commands=['start', 'help'])
+@BOT.message_handler(commands=['start', 'help'])
 def start_help(message, debug: bool = False):
     user = message.chat.first_name  # Имя пользователя в базе SQL
     chat_id = message.chat.id  # ID чата с пользователем в базе SQL
 
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -146,7 +146,7 @@ def start_help(message, debug: bool = False):
 
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)', (
-                           message.chat.id, Bot.send_message(
+                           message.chat.id, BOT.send_message(
                                message.chat.id,
                                f'<b>Здравствуйте, <u>{user}</u>! \U0001F642'
                                f'\nМеня зовут '
@@ -156,13 +156,13 @@ def start_help(message, debug: bool = False):
                                reply_markup=markup).message_id))
     else:
         if not debug:
-            Bot.delete_message(message.chat.id, message.id)
+            BOT.delete_message(message.chat.id, message.id)
         else:
             pass
 
-        time.sleep(DEL_TIME)
+        sleep(DEL_TIME)
 
-        lang = random.randint(1, 1000)
+        lang = randint(1, 1000)
 
         lang_greet_dict = {
             900: f'<b>?ьчомоп мав угом я меч, '
@@ -212,7 +212,7 @@ def start_help(message, debug: bool = False):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_message(message.chat.id, message_text,
+                        BOT.send_message(message.chat.id, message_text,
                                          parse_mode='html',
                                          reply_markup=markup).message_id))
 
@@ -221,10 +221,10 @@ def start_help(message, debug: bool = False):
     users_db.close()
 
 
-@Bot.message_handler(commands=['clean'])
+@BOT.message_handler(commands=['clean'])
 @check_bd_chat_id
 def clean(message):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -232,13 +232,13 @@ def clean(message):
                                         callback_data='delete_message')
     btn_net = types.InlineKeyboardButton(text='Нет', callback_data='help')
     markup.row(btn_da, btn_net)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(0.5)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(0.5)
     cursor.execute(
         'INSERT INTO message_ids (chat_id, message_id)'
         ' VALUES (?, ?)',
         (message.chat.id,
-         Bot.send_message(
+         BOT.send_message(
              message.chat.id,
              f"Вы хотите полностью очистить этот чат?"
              f"\n"
@@ -252,14 +252,14 @@ def clean(message):
 
 
 def delete_message(message):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
     cursor.execute('SELECT message_id FROM message_ids WHERE chat_id = ?',
                    (message.chat.id,))
     message_ids = cursor.fetchall()
 
-    Bot.delete_message(message.chat.id, message.id)
-    sent_message = Bot.send_message(message.chat.id,
+    BOT.delete_message(message.chat.id, message.id)
+    sent_message = BOT.send_message(message.chat.id,
                                     f"<b>Идёт очистка чата</b> \U0001F9F9",
                                     parse_mode='html')
 
@@ -269,30 +269,30 @@ def delete_message(message):
             (message.chat.id, message_id[0]))
         users_db.commit()
         try:
-            Bot.delete_message(message.chat.id, message_id[0])
-            time.sleep(0.01)
+            BOT.delete_message(message.chat.id, message_id[0])
+            sleep(0.01)
         except ApiTelegramException:
             pass
 
     cursor.close()
     users_db.close()
 
-    Bot.delete_message(sent_message.chat.id, sent_message.message_id)
+    BOT.delete_message(sent_message.chat.id, sent_message.message_id)
 
 
 def admin(message):  # Админское меню
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
     btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
     cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                    ' VALUES (?, ?)',
                    (message.chat.id,
-                    Bot.send_message(
+                    BOT.send_message(
                         message.chat.id,
                         '<b>Добро пожаловать в админское меню!</b>'
                         '\n'
@@ -309,26 +309,26 @@ def admin(message):  # Админское меню
     users_db.close()
 
 
-@Bot.message_handler(commands=['proportions'])
+@BOT.message_handler(commands=['proportions'])
 @check_is_admin
 def proportions(message, debug: bool = False):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     if not debug:
-        Bot.delete_message(message.chat.id, message.id)
-        time.sleep(DEL_TIME)
+        BOT.delete_message(message.chat.id, message.id)
+        sleep(DEL_TIME)
     cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                    ' VALUES (?, ?)', (
                        message.chat.id,
-                       Bot.send_message(
+                       BOT.send_message(
                            message.chat.id,
                            f'Введите через пробел: '
                            f'\nПропорции компонентов '
                            f'<b>A</b> и <b>B</b>, '
                            f'и общую массу - <b>C</b>',
                            parse_mode='html').message_id))
-    Bot.register_next_step_handler(message, calculate_proportions)
+    BOT.register_next_step_handler(message, calculate_proportions)
 
     users_db.commit()
     cursor.close()
@@ -336,7 +336,7 @@ def proportions(message, debug: bool = False):
 
 
 def calculate_proportions(message):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
@@ -382,7 +382,7 @@ def calculate_proportions(message):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)', (
                            message.chat.id,
-                           Bot.reply_to(
+                           BOT.reply_to(
                                message,
                                f'Для раствора массой: <b>{c_new} гр.'
                                f'\nНеобходимо:</b>'
@@ -396,7 +396,7 @@ def calculate_proportions(message):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)', (
                            message.chat.id,
-                           Bot.send_message(
+                           BOT.send_message(
                                message.chat.id,
                                f"Неверный формат данных."
                                f"\nПожалуйста, "
@@ -408,35 +408,35 @@ def calculate_proportions(message):
     users_db.close()
 
 
-@Bot.message_handler(commands=['users'])
+@BOT.message_handler(commands=['users'])
 @check_is_admin
 def get_users_count(message):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
     cursor.execute("SELECT COUNT(username) FROM polzovately")
     count = cursor.fetchone()[0]
 
-    sent_message = Bot.send_message(
+    sent_message = BOT.send_message(
         message.chat.id,
         f"Количество пользователей в БД: {count}"
     )
 
-    Bot.delete_message(message.chat.id, message.id)
+    BOT.delete_message(message.chat.id, message.id)
 
     cursor.close()
     users_db.close()
 
-    time.sleep(3.5)
+    sleep(3.5)
 
-    Bot.delete_message(sent_message.chat.id, sent_message.message_id)
+    BOT.delete_message(sent_message.chat.id, sent_message.message_id)
 
 
-@Bot.message_handler(commands=['broadcast'])
+@BOT.message_handler(commands=['broadcast'])
 @check_is_admin
 def start_broadcast(message):
     global BROADCAST_ADMIN_ID
 
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -446,19 +446,19 @@ def start_broadcast(message):
 
     if BROADCAST_ADMIN_ID is None:
         BROADCAST_ADMIN_ID = message.from_user.id
-        Bot.delete_message(message.chat.id, message.id)
-        time.sleep(DEL_TIME)
+        BOT.delete_message(message.chat.id, message.id)
+        sleep(DEL_TIME)
 
         BROADCAST_FUNC_MESSAGES_IDS.append(
-            (Bot.send_message(message.chat.id,
+            (BOT.send_message(message.chat.id,
                               "Отправьте сообщение для рассылки",
                               reply_markup=markup)).message_id
         )
 
-        Bot.register_next_step_handler(message, confirm_broadcast)
+        BOT.register_next_step_handler(message, confirm_broadcast)
 
     else:
-        new_message_id = Bot.send_message(
+        new_message_id = BOT.send_message(
             message.chat.id,
             "Сейчас идёт рассылка другого администратора"
         ).message_id
@@ -476,7 +476,7 @@ def confirm_broadcast(message):
     global BROADCAST_MESSAGE
 
     if BROADCAST_ADMIN_ID is not None:
-        users_db = sqlite3.connect('UsersDB.sql')
+        users_db = connect('UsersDB.sql')
         cursor = users_db.cursor()
 
         BROADCAST_MESSAGE = message
@@ -497,7 +497,7 @@ def confirm_broadcast(message):
         markup.add(btn_send_broadcast, btn_cancel_broadcast)
 
         BROADCAST_FUNC_MESSAGES_IDS.append(
-            (Bot.send_message(message.chat.id, 'Разослать сообщение?',
+            (BOT.send_message(message.chat.id, 'Разослать сообщение?',
                               reply_markup=markup)).id)
 
         users_db.commit()
@@ -505,15 +505,15 @@ def confirm_broadcast(message):
         users_db.close()
 
 
-@Bot.callback_query_handler(func=lambda call: call.data == "send_broadcast")
+@BOT.callback_query_handler(func=lambda call: call.data == "send_broadcast")
 def send_broadcast(call):
     global BROADCAST_MESSAGE
     global BROADCAST_ADMIN_ID
     global BROADCAST_FUNC_MESSAGES_IDS
 
-    Bot.answer_callback_query(call.id)
+    BOT.answer_callback_query(call.id)
 
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
     cursor.execute("SELECT chat_id FROM polzovately")
     chat_ids = cursor.fetchall()
@@ -524,21 +524,21 @@ def send_broadcast(call):
 
     while BROADCAST_FUNC_MESSAGES_IDS:
         func_message_id = BROADCAST_FUNC_MESSAGES_IDS.pop(0)
-        Bot.delete_message(call.message.chat.id, func_message_id)
-        time.sleep(0.2)
+        BOT.delete_message(call.message.chat.id, func_message_id)
+        sleep(0.2)
 
-    time.sleep(DEL_TIME)
-    sent_message = Bot.send_message(call.message.chat.id,
+    sleep(DEL_TIME)
+    sent_message = BOT.send_message(call.message.chat.id,
                                     text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>',
                                     parse_mode='html')
     start_time = datetime.now().strftime("%d-%m-%Y %H:%M").split('.')[0]
 
     if broadcast_type == 'photo':
-        broadcast_function = Bot.send_photo
+        broadcast_function = BOT.send_photo
         content_args = {'caption': BROADCAST_MESSAGE.caption}
         content_value = BROADCAST_MESSAGE.photo[-1].file_id
     elif broadcast_type == 'text':
-        broadcast_function = Bot.send_message
+        broadcast_function = BOT.send_message
         content_args = {}
         content_value = BROADCAST_MESSAGE.text
 
@@ -548,12 +548,12 @@ def send_broadcast(call):
             try:
                 broadcast_function(chat_id[0], content_value, **content_args)
                 send_count += 1
-                time.sleep(0.1)
+                sleep(0.1)
             except ApiTelegramException:
                 pass
 
-    Bot.delete_message(call.message.chat.id, sent_message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(call.message.chat.id, sent_message.id)
+    sleep(DEL_TIME)
 
     if (str(send_count)[-1] in ['2', '3', '4']
             and str(send_count) not in ['12', '13', '14']):
@@ -568,46 +568,46 @@ def send_broadcast(call):
                          f'\n\n\U0000231A {start_time.split()[1]}'
                          )
 
-    Bot.send_message(call.message.chat.id,
+    BOT.send_message(call.message.chat.id,
                      f'{broadcast_success}'
                      f'\n'
                      f'\n\U00002B07 <b>Содержание</b> \U00002B07',
                      parse_mode='html'
                      )
 
-    time.sleep(DEL_TIME)
+    sleep(DEL_TIME)
     broadcast_function(call.message.chat.id, content_value, **content_args)
 
     BROADCAST_ADMIN_ID = None
     BROADCAST_MESSAGE = None
 
 
-@Bot.callback_query_handler(func=lambda call: call.data == 'cancel')
+@BOT.callback_query_handler(func=lambda call: call.data == 'cancel')
 def cancel_broadcast(call):
     global BROADCAST_MESSAGE
     global BROADCAST_ADMIN_ID
     global BROADCAST_FUNC_MESSAGES_IDS
 
-    Bot.answer_callback_query(call.id)
+    BOT.answer_callback_query(call.id)
 
     while BROADCAST_FUNC_MESSAGES_IDS:
         func_message_id = BROADCAST_FUNC_MESSAGES_IDS.pop(0)
-        Bot.delete_message(call.message.chat.id, func_message_id)
-        time.sleep(0.2)
+        BOT.delete_message(call.message.chat.id, func_message_id)
+        sleep(0.2)
 
     BROADCAST_ADMIN_ID = None
     BROADCAST_MESSAGE = None
 
-    time.sleep(DEL_TIME)
-    sent_message = Bot.send_message(call.message.chat.id,
+    sleep(DEL_TIME)
+    sent_message = BOT.send_message(call.message.chat.id,
                                     text='Рассылка отменена')
-    time.sleep(5)
-    Bot.delete_message(call.message.chat.id, sent_message.id)
+    sleep(5)
+    BOT.delete_message(call.message.chat.id, sent_message.id)
 
 
 def tarot_start(message):  # Проверка условий для Таро
     chat_id = message.chat.id
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     cursor.execute(
@@ -619,8 +619,8 @@ def tarot_start(message):  # Проверка условий для Таро
     last_tarot_date = cursor.fetchone()[0]
 
     if chat_id in ADMIN_IDS:
-        Bot.delete_message(message.chat.id, message.id)
-        time.sleep(DEL_TIME)
+        BOT.delete_message(message.chat.id, message.id)
+        sleep(DEL_TIME)
         tarot_main(message)
         start_help(message, True)
 
@@ -634,7 +634,7 @@ def tarot_start(message):  # Проверка условий для Таро
                 'INSERT INTO message_ids (chat_id, message_id)'
                 ' VALUES (?, ?)',
                 (message.chat.id,
-                 Bot.send_message(
+                 BOT.send_message(
                      message.chat.id,
                      f'<u>{user_name}</u>, '
                      f'вы уже сегодня получили расклад, попробуйте завтра!',
@@ -651,8 +651,8 @@ def tarot_start(message):  # Проверка условий для Таро
             )
 
             users_db.commit()
-            Bot.delete_message(message.chat.id, message.id)
-            time.sleep(DEL_TIME)
+            BOT.delete_message(message.chat.id, message.id)
+            sleep(DEL_TIME)
             tarot_main(message)
             start_help(message, True)
 
@@ -670,14 +670,14 @@ def tarot_main(message):
         path = '/home/CSBot/Tarot'
         char = '/'
 
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     cursor.execute(
         'INSERT INTO message_ids (chat_id, message_id)'
         ' VALUES (?, ?)',
         (message.chat.id,
-         Bot.send_message(
+         BOT.send_message(
              message.chat.id,
              '<b>Расклад Таро - это всего лишь инструмент для '
              'ознакомления и развлечения. '
@@ -690,13 +690,13 @@ def tarot_main(message):
              parse_mode='html').message_id))
 
     users_db.commit()
-    time.sleep(tarot_delay)
+    sleep(tarot_delay)
 
-    cards = glob.glob(f'{path}/*.jpg')
+    cards = glob(f'{path}/*.jpg')
     user_random_cards = []
 
     while len(user_random_cards) < 3:
-        card = random.choice(cards)
+        card = choice(cards)
         card_num = int(card.split(char)[-1].split('.')[0])
 
         if (card_num not in
@@ -722,22 +722,22 @@ def tarot_main(message):
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            Bot.send_photo(
+                            BOT.send_photo(
                                 message.chat.id, photo,
                                 caption=f'<b>{caption}</b>: {description}',
                                 parse_mode='html').message_id))
 
             users_db.commit()
-            time.sleep(tarot_delay)
+            sleep(tarot_delay)
 
     cursor.close()
     users_db.close()
 
 
-@Bot.message_handler(commands=['studio'])
+@BOT.message_handler(commands=['studio'])
 @check_bd_chat_id
 def studio(message):  # Вкладка студии
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -753,13 +753,13 @@ def studio(message):  # Вкладка студии
     markup.row(btn_tg_dm)
     markup.row(btn_2gis)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
     with open('studio_and_directions/studio_img.PNG', 'rb') as img_studio:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_studio,
                             caption=f'<b>Наша мастерская</b> – это то место, '
@@ -783,7 +783,7 @@ def studio(message):  # Вкладка студии
 
 
 def directions(message, offsite=False):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -827,13 +827,13 @@ def directions(message, offsite=False):
         markup.row(btn_candles)
     markup.row(btn_back)
 
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                    ' VALUES (?, ?)',
                    (message.chat.id,
-                    Bot.send_message(
+                    BOT.send_message(
                         message.chat.id,
                         f'<b>Выберите <u>направление,</u> о котором хотите '
                         f'узнать подробнее:</b>',
@@ -846,10 +846,10 @@ def directions(message, offsite=False):
     users_db.close()
 
 
-@Bot.message_handler(commands=['mk'])
+@BOT.message_handler(commands=['mk'])
 @check_bd_chat_id
 def offsite_workshops(message):  # Вкладка выездных МК
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -868,15 +868,15 @@ def offsite_workshops(message):  # Вкладка выездных МК
     markup.row(btn_directions_offsite)
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/offsite_workshops_img.PNG',
               'rb') as img_studio:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_studio,
                             caption='<b>Вы хотите удивить гостей '
@@ -905,10 +905,10 @@ def offsite_workshops(message):  # Вкладка выездных МК
     users_db.close()
 
 
-@Bot.message_handler(commands=['shop'])
+@BOT.message_handler(commands=['shop'])
 @check_bd_chat_id
 def shop(message):  # Вкладка магазина
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -928,14 +928,14 @@ def shop(message):  # Вкладка магазина
     markup.row(btn_pay, btn_shipment)
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/craft_shop.png', 'rb') as shop_img:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             shop_img,
                             caption=f'<b>Добро пожаловать в наш '
@@ -960,18 +960,18 @@ def shop(message):  # Вкладка магазина
     users_db.close()
 
 
-@Bot.callback_query_handler(func=lambda call: call.data == "catalog")
+@BOT.callback_query_handler(func=lambda call: call.data == "catalog")
 def catalog(call):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
-    Bot.answer_callback_query(call.id)
+    BOT.answer_callback_query(call.id)
 
     with open('catalog/CSA_catalog.pdf', 'rb') as catalog_pdf:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (call.message.chat.id,
-                        Bot.send_document(
+                        BOT.send_document(
                             call.message.chat.id,
                             catalog_pdf,
                             caption='Представляем наш каталог в формате PDF!'
@@ -985,7 +985,7 @@ def catalog(call):
 
 
 def shipment(message):  # Вкладка "Доставка"
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -995,14 +995,14 @@ def shipment(message):  # Вкладка "Доставка"
     btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/shipment.jpg', 'rb') as shipment_img:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             shipment_img,
                             caption='<b>После изготовления вашего заказа, '
@@ -1036,7 +1036,7 @@ def shipment(message):  # Вкладка "Доставка"
 
 
 def pay(message):  # Вкладка "Оплата"
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -1049,14 +1049,14 @@ def pay(message):  # Вкладка "Оплата"
     btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/pay.png', 'rb') as pay_img:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             pay_img,
                             caption='<u>После выбора товаров '
@@ -1085,7 +1085,7 @@ def pay(message):  # Вкладка "Оплата"
 
 
 def order(message):  # Вкладка "Как заказать"
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -1098,14 +1098,14 @@ def order(message):  # Вкладка "Как заказать"
     btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/order.jpg', 'rb') as img_order:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_order,
                             caption='<b>Заказать красивое '
@@ -1139,10 +1139,10 @@ def order(message):  # Вкладка "Как заказать"
     users_db.close()
 
 
-@Bot.message_handler(commands=['soc_profiles'])
+@BOT.message_handler(commands=['soc_profiles'])
 @check_bd_chat_id
 def soc_profiles(message):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -1194,12 +1194,12 @@ def soc_profiles(message):
     markup.row(btn_support)
     markup.row(btn_back)
 
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
     cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                    ' VALUES (?, ?)',
                    (message.chat.id,
-                    Bot.send_message(
+                    BOT.send_message(
                         message.chat.id,
                         f'<b>Какая <u>соц.сеть</u>, вас интересует:</b>',
                         parse_mode='html',
@@ -1212,7 +1212,7 @@ def soc_profiles(message):
 
 
 def epoxy(message):  # Описание занятия по смоле в студии
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -1227,14 +1227,14 @@ def epoxy(message):  # Описание занятия по смоле в сту
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/epoxy_img.png', 'rb') as img_epoxy:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_epoxy,
                             caption=f'<b>Эпоксидная смола</b> - это '
@@ -1290,7 +1290,7 @@ def epoxy(message):  # Описание занятия по смоле в сту
 
 
 def gips_info(message, offsite=False):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     if offsite:
@@ -1313,8 +1313,8 @@ def gips_info(message, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/gips_img.png', 'rb') as img_gips:
         caption = (f'<b>Гипс</b> - это универсальный '
@@ -1336,7 +1336,7 @@ def gips_info(message, offsite=False):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_gips,
                             caption=caption,
@@ -1349,7 +1349,7 @@ def gips_info(message, offsite=False):
 
 
 def sketching(message):  # Описание занятия по Скетчингу в студии
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -1363,15 +1363,15 @@ def sketching(message):  # Описание занятия по Скетчинг
 
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/sketching_img.png',
               'rb') as img_sketching:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_sketching,
                             caption='<b>Скетчинг</b> - это техника быстрого '
@@ -1411,7 +1411,7 @@ def sketching(message):  # Описание занятия по Скетчинг
 
 
 def tie_dye_info(message, offsite=False):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     if offsite:
@@ -1434,8 +1434,8 @@ def tie_dye_info(message, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/tie_dye_photo.png', 'rb') as img_tie_dye:
         caption = (f'<b>Тай-дай</b> - это техника '
@@ -1462,7 +1462,7 @@ def tie_dye_info(message, offsite=False):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_tie_dye,
                             caption=caption,
@@ -1475,7 +1475,7 @@ def tie_dye_info(message, offsite=False):
 
 
 def custom_cloth(message):  # Описание занятия по Кастому одежды в студии
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     markup = types.InlineKeyboardMarkup()
@@ -1486,15 +1486,15 @@ def custom_cloth(message):  # Описание занятия по Кастом�
         url='https://t.me/elenitsa17')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/custom_cloth_img.png',
               'rb') as img_custom_cloth:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_custom_cloth,
                             caption='<b>Роспись одежды</b> - это творческий '
@@ -1543,7 +1543,7 @@ def custom_cloth(message):  # Описание занятия по Кастом�
 
 
 def candles_info(message, offsite=False):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     if offsite:
@@ -1566,8 +1566,8 @@ def candles_info(message, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    Bot.delete_message(message.chat.id, message.id)
-    time.sleep(DEL_TIME)
+    BOT.delete_message(message.chat.id, message.id)
+    sleep(DEL_TIME)
 
     with open('studio_and_directions/candles_photo.png', 'rb') as img_candles:
         caption = (f'<b>Ароматические свечи</b> - это не '
@@ -1602,7 +1602,7 @@ def candles_info(message, offsite=False):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_photo(
+                        BOT.send_photo(
                             message.chat.id,
                             img_candles,
                             caption=caption,
@@ -1614,10 +1614,10 @@ def candles_info(message, offsite=False):
     users_db.close()
 
 
-@Bot.message_handler(content_types=['text'])
+@BOT.message_handler(content_types=['text'])
 @check_bd_chat_id
 def message_input_text(message):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
     cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
@@ -1630,7 +1630,7 @@ def message_input_text(message):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_message(message.chat.id,
+                        BOT.send_message(message.chat.id,
                                          text='Матата!').message_id))
         users_db.commit()
         cursor.close()
@@ -1639,7 +1639,7 @@ def message_input_text(message):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_message(message.chat.id,
+                        BOT.send_message(message.chat.id,
                                          text='Акуна!').message_id))
         users_db.commit()
         cursor.close()
@@ -1648,7 +1648,7 @@ def message_input_text(message):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_message(message.chat.id,
+                        BOT.send_message(message.chat.id,
                                          text='\U0001F417 \U0001F439'
                                          ).message_id))
         users_db.commit()
@@ -1659,7 +1659,7 @@ def message_input_text(message):
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            Bot.send_photo(message.chat.id, img_akuna,
+                            BOT.send_photo(message.chat.id, img_akuna,
                                            caption=f'<b>Акуна Матата!</b>',
                                            parse_mode='html').message_id))
             users_db.commit()
@@ -1670,7 +1670,7 @@ def message_input_text(message):
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            Bot.send_photo(message.chat.id,
+                            BOT.send_photo(message.chat.id,
                                            img_bolt).message_id))
             users_db.commit()
             cursor.close()
@@ -1680,7 +1680,7 @@ def message_input_text(message):
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            Bot.send_photo(message.chat.id,
+                            BOT.send_photo(message.chat.id,
                                            HW_img).message_id))
             users_db.commit()
             cursor.close()
@@ -1690,7 +1690,7 @@ def message_input_text(message):
 
 
 def chepuha(message, debug: bool = False):
-    users_db = sqlite3.connect('UsersDB.sql')
+    users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
     user_name = message.chat.first_name
 
@@ -1698,7 +1698,7 @@ def chepuha(message, debug: bool = False):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_message(
+                        BOT.send_message(
                             message.chat.id,
                             text=f'Извините <u>{user_name}</u>, '
                                  f'я вас не понимаю. '
@@ -1717,7 +1717,7 @@ def chepuha(message, debug: bool = False):
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
-                        Bot.send_message(
+                        BOT.send_message(
                             message.chat.id,
                             text=f'Извините <u>{user_name}</u>, похоже '
                                  f'вы у нас впервые!'
@@ -1731,7 +1731,7 @@ def chepuha(message, debug: bool = False):
     users_db.close()
 
 
-@Bot.callback_query_handler(func=lambda callback: True)
+@BOT.callback_query_handler(func=lambda callback: True)
 def handle_callback(callback):
     callback_functions = {
         'admin': admin,
@@ -1761,8 +1761,8 @@ def handle_callback(callback):
         'tie_dye_offsite': lambda message: tie_dye_info(message, offsite=True)
     }
 
-    Bot.answer_callback_query(callback.id)
+    BOT.answer_callback_query(callback.id)
     callback_functions[callback.data](callback.message)
 
 
-Bot.infinity_polling()
+BOT.infinity_polling()
