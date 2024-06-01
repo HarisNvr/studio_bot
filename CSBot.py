@@ -15,8 +15,11 @@ load_dotenv()
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
-ADMIN_IDS = [154395483, 1019826386]
-'''[HarisNvrsk, elenitsa17]'''
+
+ADMIN_IDS = []
+for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
+    ADMIN_IDS.append(int(ADMIN_ID))
+# .env export data only as text, chat_id in pyTelegramBotAPI preferably int
 
 DEL_TIME = 0.5
 '''Time between deleting old message and sending a new one'''
@@ -25,14 +28,17 @@ OS_TYPE = platform
 '''Current OS, python runtime'''
 
 if OS_TYPE == 'win32':
-    BOT = TeleBot(
-        '6301286378:AAH6rwbVlOIeEtZkKQKqA2RykhD2E-oXq8g')  # @CraftStudioBotJr
+    BOT = TeleBot(getenv('CS_BOT_JR'))
 else:
-    BOT = TeleBot(
-        '6136773109:AAHkoWKgd8TspwQr_-9RQ6iuT10iXoLIrTE')  # @CraftStudioBot
+    BOT = TeleBot(getenv('CS_BOT'))
 
 
 def morning_routine():
+    """
+    Delete old message IDs from the DB. Telegram's policy doesn't allow bots
+    to delete messages that are older than 48 hours.
+    :return: Nothing
+    """
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
