@@ -5,9 +5,12 @@ from sqlite3 import connect
 from sys import platform
 from time import sleep
 from os import getenv
+from dotenv import load_dotenv
 
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
+
+load_dotenv()
 
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
