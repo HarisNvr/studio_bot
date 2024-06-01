@@ -19,7 +19,7 @@ BROADCAST_FUNC_MESSAGES_IDS = []
 ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
-# .env export data only as text, chat_id in pyTelegramBotAPI preferably int
+# .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
 
 DEL_TIME = 0.5
 '''Time between deleting old message and sending a new one'''
