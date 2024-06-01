@@ -4,6 +4,7 @@ from random import choice, randint
 from sqlite3 import connect
 from sys import platform
 from time import sleep
+from os import getenv
 
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
@@ -1149,42 +1150,42 @@ def soc_profiles(message):
 
     btn_vk = types.InlineKeyboardButton(
         text='Группа VK',
-        url='https://vk.com/elenitsa_custom'
+        url=getenv('VK')
     )
 
     btn_inst = types.InlineKeyboardButton(
         text='Instagram',
-        url='https://instagram.com/craft_studio_art'
+        url=getenv('INSTAGRAM')
     )
 
     btn_tg_channel = types.InlineKeyboardButton(
         text='Наш канал в Telegram',
-        url='http://t.me/craft_studio_art'
+        url=getenv('TG_CHANNEL')
     )
 
     btn_wa = types.InlineKeyboardButton(
         text='WhatsApp',
-        url='https://wa.me/79186365539'
+        url=getenv('WA')
+    )
+
+    btn_ya_disk = types.InlineKeyboardButton(
+        text='Примеры работ на Я.Диск',
+        url=getenv('YA_DISK')
+    )
+
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='Telegram',
+        url=getenv('TG_DM')
+    )
+
+    btn_support = types.InlineKeyboardButton(
+        text='Тех. поддержка БОТА',
+        url=getenv('SUPPORT')
     )
 
     btn_back = types.InlineKeyboardButton(
         text='Назад',
         callback_data='help'
-    )
-
-    btn_ya_disk = types.InlineKeyboardButton(
-        text='Примеры работ на Я.Диск',
-        url='https://disk.yandex.ru/d/Fg1AHRy9DQPQhQ'
-    )
-
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='Telegram',
-        url='https://t.me/elenitsa17'
-    )
-
-    btn_support = types.InlineKeyboardButton(
-        text='Тех. поддержка БОТА',
-        url='https://t.me/HarisNvrsk'
     )
 
     markup.row(btn_inst, btn_vk)
