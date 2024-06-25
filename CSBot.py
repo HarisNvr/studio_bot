@@ -16,6 +16,8 @@ BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
 
+ORG_NAME = getenv('ORG_NAME')
+
 ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
@@ -28,9 +30,9 @@ OS_TYPE = platform
 '''Current OS, python runtime'''
 
 if OS_TYPE == 'win32':
-    BOT = TeleBot(getenv('CS_BOT_JR'))
+    BOT = TeleBot(getenv('BOT_JR'))
 else:
-    BOT = TeleBot(getenv('CS_BOT'))
+    BOT = TeleBot(getenv('BOT'))
 
 
 def morning_routine():
@@ -160,7 +162,7 @@ def start_help(message, debug: bool = False):
                                message.chat.id,
                                f'<b>Здравствуйте, <u>{user}</u>! \U0001F642'
                                f'\nМеня зовут '
-                               f'CraftStudioBot.</b>'
+                               f'{BOT.get_me().username}.</b>'
                                f'\nЧем я могу вам помочь?',
                                parse_mode='html',
                                reply_markup=markup).message_id))
@@ -694,7 +696,7 @@ def tarot_main(message):
              'Расклад карт Таро не является истиной и не должен '
              'использоваться для принятия важных решений.</b>'
              '\n'
-             '\n<u>CraftStudioArt</u> и его сотрудники не несут '
+             f'\n<u>{ORG_NAME}</u> и его сотрудники не несут '
              'ответственности за любые действия и их последствия, '
              'которые повлекло использование данного расклада карт Таро.',
              parse_mode='html').message_id))
