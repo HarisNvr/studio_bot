@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from glob import glob
 from random import choice, randint
 from sqlite3 import connect
-from sys import platform
 from time import sleep
 from os import getenv
 from dotenv import load_dotenv
@@ -26,13 +25,7 @@ for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
 DEL_TIME = 0.5
 '''Time between deleting old message and sending a new one'''
 
-OS_TYPE = platform
-'''Current OS, python runtime'''
-
-if OS_TYPE == 'win32':
-    BOT = TeleBot(getenv('BOT_JR'))
-else:
-    BOT = TeleBot(getenv('BOT'))
+BOT = TeleBot(getenv('BOT'))
 
 
 def morning_routine():
