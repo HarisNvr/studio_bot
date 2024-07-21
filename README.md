@@ -73,8 +73,6 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
-Нажимаем CTRL+O → Enter → CTRL+X для сохранения. Эти настройки помогут запускать или перезапускать нашего бота.
-
 - Запускаем нашего бота, но уже с беспрерывной работой.
 ```
 sudo systemctl enable НазваниеБота
