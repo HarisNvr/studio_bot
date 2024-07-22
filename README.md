@@ -14,8 +14,8 @@ Python, pyTelegramBotAPI, SQLite3
 
 - Клонировать репозиторий и перейти в него:
 ```
-$ git clone https://github.com/HarisNvr/EleniWS_BOT.git
-$ cd EleniWS_BOT
+git clone https://github.com/HarisNvr/EleniWS_BOT.git
+cd EleniWS_BOT
 ```
 - Настраиваем переменные окружения:
 ```
@@ -45,12 +45,12 @@ ORG_NAME=ACME_CORP # Название вашей организации
 ```
 - Установим и создадим виртуально окружение, установим зависимости:
 ```
-$ python -m pip install --upgrade pip 
-$ pip install virtualenv
-$ virtualenv venv
-$ source venv/bin/activate
-$ pip install -r requirements.txt  # установим зависимости
-$ deactivate
+python -m pip install --upgrade pip 
+pip install virtualenv
+virtualenv venv
+source venv/bin/activate
+pip install -r requirements.txt  # установим зависимости
+deactivate
 ```
 - Пропишем следующую команду для настройки беспрерывной работы нашего бота:
 ```
