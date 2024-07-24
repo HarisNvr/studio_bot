@@ -15,7 +15,7 @@ Python, pyTelegramBotAPI, SQLite3
 - Клонировать репозиторий и перейти в него:
 ```
 git clone https://github.com/HarisNvr/EleniWS_BOT.git
-cd EleniWS_BOT
+cd studio_bot
 ```
 - Настраиваем переменные окружения:
 ```
@@ -49,12 +49,12 @@ python -m pip install --upgrade pip
 pip install virtualenv
 virtualenv venv
 source venv/bin/activate
-pip install -r requirements.txt  # установим зависимости
+pip install -r requirements.txt
 deactivate
 ```
 - Пропишем следующую команду для настройки беспрерывной работы нашего бота:
 ```
-nano /lib/systemd/system/НазваниеБота.service
+nano /lib/systemd/system/studio_bot.service
 ```
 ```
 [Unit]
@@ -63,9 +63,9 @@ After=network.target
 
 [Service]
 EnvironmentFile=/etc/environment
-ExecStart=/home/НазваниеБота/venv/bin/python ФайлБота.py
-ExecReload=/home/НазваниеБота/venv/bin/python ФайлБота.py
-WorkingDirectory=/home/НазваниеБота/
+ExecStart=/home/studio_bot/venv/bin/python bot_main.py
+ExecReload=/home/studio_bot/venv/bin/python bot_main.py
+WorkingDirectory=/home/studio_bot/
 KillMode=process
 Restart=always
 RestartSec=5
@@ -75,6 +75,6 @@ WantedBy=multi-user.target
 ```
 - Запускаем нашего бота, но уже с беспрерывной работой.
 ```
-sudo systemctl enable НазваниеБота
-sudo systemctl start НазваниеБота
+sudo systemctl enable studio_bot
+sudo systemctl start studio_bot
 ```
