@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 from glob import glob
+from os import getenv
 from random import choice, randint
 from sqlite3 import connect
+from sys import platform
 from time import sleep
-from os import getenv
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
 
@@ -668,7 +669,7 @@ def tarot_start(message):  # Проверка условий для Таро
 def tarot_main(message):
     tarot_delay = 1.5  # Задержка между картами Таро
 
-    if OS_TYPE == 'win32':
+    if platform == 'win32':
         path = 'Tarot'
         char = '\\'
     else:
