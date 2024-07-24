@@ -11,6 +11,8 @@ from telebot.apihelper import ApiTelegramException
 
 load_dotenv()
 
+BOT = TeleBot(getenv('BOT'))
+
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
@@ -24,8 +26,6 @@ for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
 
 DEL_TIME = 0.5
 '''Time between deleting old message and sending a new one'''
-
-BOT = TeleBot(getenv('BOT'))
 
 
 def morning_routine():
