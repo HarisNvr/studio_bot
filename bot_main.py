@@ -13,20 +13,19 @@ from telebot.apihelper import ApiTelegramException
 load_dotenv()
 
 BOT = TeleBot(getenv('BOT'))
+ORG_NAME = getenv('ORG_NAME')
+
+DEL_TIME = 0.5
+'''Time between deleting old message and sending a new one'''
 
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
 
-ORG_NAME = getenv('ORG_NAME')
-
 ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
-
-DEL_TIME = 0.5
-'''Time between deleting old message and sending a new one'''
 
 
 def morning_routine():
@@ -68,12 +67,11 @@ def check_bd_chat_id(func):
         cursor.execute("SELECT username FROM polzovately "
                        "WHERE chat_id = ?", (chat_id,))
         result = cursor.fetchone()
-        cursor.close()
         users_db.close()
         if result:
             return func(message, *args)
         else:
-            return chepuha(message, debug=True)
+            return chepuha(message, new_user=True)
 
     return wrapper
 
@@ -97,7 +95,7 @@ def check_is_admin(func):
 
 
 @BOT.message_handler(commands=['start', 'help'])
-def start_help(message, debug: bool = False):
+def start_help(message, keep_last_msg: bool = False):
     user = message.chat.first_name  # Имя пользователя в базе SQL
     chat_id = message.chat.id  # ID чата с пользователем в базе SQL
 
@@ -161,7 +159,7 @@ def start_help(message, debug: bool = False):
                                parse_mode='html',
                                reply_markup=markup).message_id))
     else:
-        if not debug:
+        if not keep_last_msg:
             BOT.delete_message(message.chat.id, message.id)
         else:
             pass
@@ -223,7 +221,6 @@ def start_help(message, debug: bool = False):
                                          reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -253,7 +250,6 @@ def clean(message):
              reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -280,7 +276,6 @@ def delete_message(message):
         except ApiTelegramException:
             pass
 
-    cursor.close()
     users_db.close()
 
     BOT.delete_message(sent_message.chat.id, sent_message.message_id)
@@ -311,7 +306,6 @@ def admin(message):  # Админское меню
                         reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -337,7 +331,6 @@ def proportions(message, debug: bool = False):
     BOT.register_next_step_handler(message, calculate_proportions)
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -410,7 +403,6 @@ def calculate_proportions(message):
                                parse_mode='html').message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -429,7 +421,6 @@ def get_users_count(message):
 
     BOT.delete_message(message.chat.id, message.id)
 
-    cursor.close()
     users_db.close()
 
     sleep(3.5)
@@ -474,7 +465,6 @@ def start_broadcast(message):
                        (message.chat.id, new_message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -507,7 +497,6 @@ def confirm_broadcast(message):
                               reply_markup=markup)).id)
 
         users_db.commit()
-        cursor.close()
         users_db.close()
 
 
@@ -523,7 +512,6 @@ def send_broadcast(call):
     cursor = users_db.cursor()
     cursor.execute("SELECT chat_id FROM polzovately")
     chat_ids = cursor.fetchall()
-    cursor.close()
     users_db.close()
 
     broadcast_type = BROADCAST_MESSAGE.content_type
@@ -662,7 +650,6 @@ def tarot_start(message):  # Проверка условий для Таро
             tarot_main(message)
             start_help(message, True)
 
-    cursor.close()
     users_db.close()
 
 
@@ -736,7 +723,6 @@ def tarot_main(message):
             users_db.commit()
             sleep(tarot_delay)
 
-    cursor.close()
     users_db.close()
 
 
@@ -784,7 +770,6 @@ def studio(message):  # Вкладка студии
                             parse_mode='html',
                             reply_markup=markup).message_id))
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -848,7 +833,6 @@ def directions(message, offsite=False):
                    )
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -907,7 +891,6 @@ def offsite_workshops(message):  # Вкладка выездных МК
                        )
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -962,7 +945,6 @@ def shop(message):  # Вкладка магазина
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -986,7 +968,6 @@ def catalog(call):
                         ).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1037,7 +1018,6 @@ def shipment(message):  # Вкладка "Доставка"
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1086,7 +1066,6 @@ def pay(message):  # Вкладка "Оплата"
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1141,7 +1120,6 @@ def order(message):  # Вкладка "Как заказать"
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1213,7 +1191,6 @@ def soc_profiles(message):
                    )
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1278,7 +1255,6 @@ def epoxy(message):  # Описание занятия по смоле в сту
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1337,7 +1313,6 @@ def gips_info(message, offsite=False):
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1396,7 +1371,6 @@ def sketching(message):  # Описание занятия по Скетчинг
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1457,7 +1431,6 @@ def tie_dye_info(message, offsite=False):
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1520,7 +1493,6 @@ def custom_cloth(message):  # Описание занятия по Кастом�
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
@@ -1580,91 +1552,77 @@ def candles_info(message, offsite=False):
                             reply_markup=markup).message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
 @BOT.message_handler(content_types=['text'])
 @check_bd_chat_id
 def message_input_text(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    with connect('UsersDB.sql') as users_db:
+        cursor = users_db.cursor()
 
-    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                   ' VALUES (?, ?)',
-                   (message.chat.id,
-                    message.message_id))
-    users_db.commit()
+        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                       ' VALUES (?, ?)',
+                       (message.chat.id, message.message_id))
+        users_db.commit()
 
-    if message.text.lower() == 'акуна':
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_message(message.chat.id,
-                                         text='Матата!').message_id))
-        users_db.commit()
-        cursor.close()
-        users_db.close()
-    elif message.text.lower() == 'матата':
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_message(message.chat.id,
-                                         text='Акуна!').message_id))
-        users_db.commit()
-        cursor.close()
-        users_db.close()
-    elif 'матата акуна' in message.text.lower():
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_message(message.chat.id,
-                                         text='\U0001F417 \U0001F439'
-                                         ).message_id))
-        users_db.commit()
-        cursor.close()
-        users_db.close()
-    elif 'акуна матата' in message.text.lower():
-        with open('easter_eggs/Akuna.jpg', 'rb') as img_akuna:
+        if message.text.lower() == 'акуна':
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            BOT.send_photo(message.chat.id, img_akuna,
-                                           caption=f'<b>Акуна Матата!</b>',
-                                           parse_mode='html').message_id))
+                            BOT.send_message(message.chat.id,
+                                             text='Матата!').message_id))
             users_db.commit()
-            cursor.close()
-            users_db.close()
-    elif message.text == '\U0001F346':
-        with open('easter_eggs/bolt.png', 'rb') as img_bolt:
+        elif message.text.lower() == 'матата':
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            BOT.send_photo(message.chat.id,
-                                           img_bolt).message_id))
+                            BOT.send_message(message.chat.id,
+                                             text='Акуна!').message_id))
             users_db.commit()
-            cursor.close()
-            users_db.close()
-    elif 'hello world' in message.text.lower():
-        with open('easter_eggs/Hello-World.jpeg', 'rb') as HW_img:
+        elif 'матата акуна' in message.text.lower():
             cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                            ' VALUES (?, ?)',
                            (message.chat.id,
-                            BOT.send_photo(message.chat.id,
-                                           HW_img).message_id))
+                            BOT.send_message(message.chat.id,
+                                             text='\U0001F417 \U0001F439'
+                                             ).message_id))
             users_db.commit()
-            cursor.close()
-            users_db.close()
-    else:
-        chepuha(message)
+        elif 'акуна матата' in message.text.lower():
+            with open('easter_eggs/Akuna.jpg', 'rb') as img_akuna:
+                cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                               ' VALUES (?, ?)',
+                               (message.chat.id,
+                                BOT.send_photo(message.chat.id, img_akuna,
+                                               caption=f'<b>Акуна Матата!</b>',
+                                               parse_mode='html').message_id))
+                users_db.commit()
+        elif message.text == '\U0001F346':
+            with open('easter_eggs/bolt.png', 'rb') as img_bolt:
+                cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                               ' VALUES (?, ?)',
+                               (message.chat.id,
+                                BOT.send_photo(message.chat.id,
+                                               img_bolt).message_id))
+                users_db.commit()
+        elif 'hello world' in message.text.lower():
+            with open('easter_eggs/Hello-World.jpeg', 'rb') as HW_img:
+                cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
+                               ' VALUES (?, ?)',
+                               (message.chat.id,
+                                BOT.send_photo(message.chat.id,
+                                               HW_img).message_id))
+                users_db.commit()
+        else:
+            chepuha(message)
 
 
-def chepuha(message, debug: bool = False):
+def chepuha(message, new_user: bool = False):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
     user_name = message.chat.first_name
 
-    if not debug:
+    if not new_user:
         cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
                        ' VALUES (?, ?)',
                        (message.chat.id,
@@ -1697,7 +1655,6 @@ def chepuha(message, debug: bool = False):
                             parse_mode='html').message_id))
 
     users_db.commit()
-    cursor.close()
     users_db.close()
 
 
