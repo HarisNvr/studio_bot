@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from glob import glob
-from os import getenv
+from os import getenv, path, getcwd
 from random import choice, randint
 from sqlite3 import connect
 from sys import platform
@@ -670,10 +670,10 @@ def tarot_main(message):
     tarot_delay = 1.5  # Задержка между картами Таро
 
     if platform == 'win32':
-        path = 'Tarot'
+        tarot_path = 'Tarot'
         char = '\\'
     else:
-        path = '/home/CSBot/Tarot'
+        tarot_path = path.join(getcwd(), 'Tarot')
         char = '/'
 
     users_db = connect('UsersDB.sql')
@@ -698,7 +698,7 @@ def tarot_main(message):
     users_db.commit()
     sleep(tarot_delay)
 
-    cards = glob(f'{path}/*.jpg')
+    cards = glob(f'{tarot_path}/*.jpg')
     user_random_cards = []
 
     while len(user_random_cards) < 3:
