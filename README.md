@@ -78,3 +78,13 @@ WantedBy=multi-user.target
 sudo systemctl enable studio_bot
 sudo systemctl start studio_bot
 ```
+## Команды, вводимые через '/' в чате:
+```
+start - Запуск бота
+help - Главное меню
+studio - Подробнее о студии
+mk - Выездные МК
+shop - Наш магазин
+soc_profiles - Наши профили в соц.сетях
+clean - Очистить чат
+```
