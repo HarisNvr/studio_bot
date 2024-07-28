@@ -41,6 +41,3 @@ class Message(Base):
     date_added: Mapped[str] = mapped_column(String(20))
 
     user = relationship('User', back_populates='messages')
-
-
-Base.metadata.create_all(engine)
