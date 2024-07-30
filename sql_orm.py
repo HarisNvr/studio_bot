@@ -9,12 +9,12 @@ load_dotenv()
 
 DB_USER = getenv('POSTGRES_USER')
 DB_PASS = getenv('POSTGRES_PASSWORD')
-DB_HOST = getenv('DB_HOST')
 DB_NAME = getenv('POSTGRES_DB')
+DB_HOST = getenv('DB_HOST')
 
 DATABASE_URL = f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}'
 
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL)
 
 
 class Base(DeclarativeBase):
