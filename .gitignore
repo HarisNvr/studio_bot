@@ -153,3 +153,4 @@ media/
 Etc/
 UsersDB.sql
 Test.py
+alembic/versions/*
