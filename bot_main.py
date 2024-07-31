@@ -7,8 +7,13 @@ from sys import platform
 from time import sleep
 
 from dotenv import load_dotenv
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import NoResultFound
+from sqlalchemy.orm import Session
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
+
+from sql_orm import engine, Message, User
 
 load_dotenv()
 
@@ -28,22 +33,28 @@ for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
 
 
+def current_time():
+    """
+    :return: Current time in format %Y-%m-%d %H:%M:%S
+    """
+    datetime_now_split = str(datetime.now()).split('.')
+    return datetime_now_split[0]
+
+
 def morning_routine():
     """
     Delete old message IDs from the DB. Telegram's policy doesn't allow bots
     to delete messages that are older than 48 hours.
     :return: Nothing
     """
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
-
     threshold = datetime.now() - timedelta(hours=51)
 
-    cursor.execute("DELETE FROM message_ids WHERE date_added < ?",
-                   (threshold,))
+    with Session(engine) as session:
+        stmt = delete(Message).where(
+            Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S'))
 
-    users_db.commit()
-    users_db.close()
+        session.execute(stmt)
+        session.commit()
 
 
 morning_routine()
@@ -52,22 +63,20 @@ morning_routine()
 def check_bd_chat_id(func):
     """
     Decorator to check if a user's chat ID exists in the database.
-    If not found, it suggests the user to
-    press /start to initialize their chat session.
+    If not found, it suggests the user to press
+    /start to initialize their chat session.
 
     :param func: The function to be decorated.
     :return: The decorated function.
     """
 
     def wrapper(message, *args):
-        users_db = connect('UsersDB.sql')
-        cursor = users_db.cursor()
         chat_id = message.chat.id
 
-        cursor.execute("SELECT username FROM polzovately "
-                       "WHERE chat_id = ?", (chat_id,))
-        result = cursor.fetchone()
-        users_db.close()
+        with Session(engine) as session:
+            stmt = select(User).where(User.chat_id == chat_id)
+            result = session.execute(stmt).scalar()
+
         if result:
             return func(message, *args)
         else:
@@ -96,11 +105,9 @@ def check_is_admin(func):
 
 @BOT.message_handler(commands=['start', 'help'])
 def start_help(message, keep_last_msg: bool = False):
-    user = message.chat.first_name  # Имя пользователя в базе SQL
-    chat_id = message.chat.id  # ID чата с пользователем в базе SQL
-
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    user_first_name = message.chat.first_name  # TG_user_first_name
+    chat_id = message.chat.id  # TG_chat_ID
+    username = message.chat.username  # TG_user_username
 
     markup = types.InlineKeyboardMarkup()
     btn_soc_profiles = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1',
@@ -125,39 +132,54 @@ def start_help(message, keep_last_msg: bool = False):
             callback_data='admin')
         markup.row(btn_admin)
 
-    try:
-        cursor.execute("SELECT username FROM polzovately WHERE chat_id = ?",
-                       (chat_id,))
-        user_name = cursor.fetchone()[0]
-        if user != user_name:
-            cursor.execute(
-                'UPDATE polzovately SET username = ? WHERE chat_id = ?',
-                (user, chat_id))
-    except TypeError:
-        cursor.execute(
-            'INSERT INTO polzovately (chat_id, username) VALUES '
-            '(?, ?)',
-            (chat_id, user))
+    with Session(engine) as session:
+        try:
+            user_record = session.execute(
+                select(User).where(User.chat_id == chat_id)).scalar_one()
 
-    if message.text == '/start':  # Обработка команды /start
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)', (
-                           message.chat.id,
-                           message.message_id))
+            if (user_record.username != username or
+                    user_record.user_first_name != user_first_name):
+                session.execute(
+                    update(User).where(User.chat_id == chat_id).values(
+                        username=username,
+                        user_first_name=user_first_name
+                    )
+                )
+        except NoResultFound:
+            user_record = User(
+                chat_id=chat_id,
+                username=username,
+                user_first_name=user_first_name
+            )
+            session.add(user_record)
+            session.commit()
 
-        cursor.execute('SELECT * FROM polzovately WHERE chat_id = ?',
-                       (chat_id,))
+    if message.text == '/start':
+        new_message = Message(
+            chat_id=user_record.id,
+            message_id=message.message_id,
+            date_added=current_time()
+        )
+        session.add(new_message)
+        session.commit()
 
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)', (
-                           message.chat.id, BOT.send_message(
-                               message.chat.id,
-                               f'<b>Здравствуйте, <u>{user}</u>! \U0001F642'
-                               f'\nМеня зовут '
-                               f'{BOT.get_me().username}.</b>'
-                               f'\nЧем я могу вам помочь?',
-                               parse_mode='html',
-                               reply_markup=markup).message_id))
+        new_message_id = BOT.send_message(
+            message.chat.id,
+            f'<b>Здравствуйте, <u>{user_first_name}</u>! \U0001F642'
+            f'\nМеня зовут {BOT.get_me().username}.</b>'
+            f'\nЧем я могу вам помочь?',
+            parse_mode='html',
+            reply_markup=markup
+        ).message_id
+
+        session.add(
+            Message(
+                chat_id=user_record.id,
+                message_id=new_message_id,
+                date_added=current_time()
+            )
+        )
+        session.commit()
     else:
         if not keep_last_msg:
             BOT.delete_message(message.chat.id, message.id)
@@ -170,58 +192,65 @@ def start_help(message, keep_last_msg: bool = False):
 
         lang_greet_dict = {
             900: f'<b>?ьчомоп мав угом я меч, '
-                 f'<u>{user[::-1]}</u></b> \U0001F643',
-            901: f'<b>नमस्ते <u>{user}</u>, '
+                 f'<u>{user_first_name[::-1]}</u></b> \U0001F643',
+            901: f'<b>नमस्ते <u>{user_first_name}</u>, '
                  f'मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642',
-            902: f'<b>Greetings <u>{user}</u>, '
+            902: f'<b>Greetings <u>{user_first_name}</u>, '
                  f'how can I help you?</b> \U0001F642',
-            903: f'<b>¡Hola! <u>{user}</u>, '
+            903: f'<b>¡Hola! <u>{user_first_name}</u>, '
                  f'¿le puedo ayudar en algo?</b> \U0001F642',
-            904: f'<b>你好 <u>{user}</u>, '
+            904: f'<b>你好 <u>{user_first_name}</u>, '
                  f'我怎么帮你？</b> \U0001F642',
-            906: f'<b>مرحبا <u>{user}</u>, كيف يمكنني مساعدتك؟'
+            906: f'<b>مرحبا <u>{user_first_name}</u>, كيف يمكنني مساعدتك؟'
                  f'</b> \U0001F642',
-            907: f'<b>Merhaba <u>{user}</u>, '
+            907: f'<b>Merhaba <u>{user_first_name}</u>, '
                  f'nasıl yardımcı olabilirim?</b> \U0001F642',
-            908: f'<b>Konnichiwa <u>{user}</u>, '
+            908: f'<b>Konnichiwa <u>{user_first_name}</u>, '
                  f'dou tasukeraremasuka?</b> \U0001F642',
-            909: f'<b>Hallo <u>{user}</u>, '
+            909: f'<b>Hallo <u>{user_first_name}</u>, '
                  f'wie kann ich Ihnen helfen?</b> \U0001F642',
-            910: f'<b>Bonjour <u>{user}</u>, '
+            910: f'<b>Bonjour <u>{user_first_name}</u>, '
                  f'comment puis-je vous aider?</b> \U0001F642',
-            911: f'<b>Ciao <u>{user}</u>, '
+            911: f'<b>Ciao <u>{user_first_name}</u>, '
                  f'come posso aiutarti?</b> \U0001F642',
-            912: f'<b>Szia <u>{user}</u>, hogyan segíthetek?</b> \U0001F642',
-            913: f'<b>Olá <u>{user}</u>, '
+            912: f'<b>Szia <u>{user_first_name}</u>, '
+                 f'hogyan segíthetek?</b> \U0001F642',
+            913: f'<b>Olá <u>{user_first_name}</u>, '
                  f'como posso ajudar?</b> \U0001F642',
-            914: f'<b>Hej <u>{user}</u>, '
+            914: f'<b>Hej <u>{user_first_name}</u>, '
                  f'hur kan jag hjälpa dig?</b> \U0001F642',
-            915: f'<b>Saluton <u>{user}</u>, '
+            915: f'<b>Saluton <u>{user_first_name}</u>, '
                  f'kiel mi povas helpi vin?</b> \U0001F642',
-            916: f'<b>Rytsas, <u>{user}</u>, '
+            916: f'<b>Rytsas, <u>{user_first_name}</u>, '
                  f'skorkydoso kostagon nyke dohaeragon ao?</b> \U0001F642',
-            917: f'<b>Sveiki <u>{user}</u>, '
+            917: f'<b>Sveiki <u>{user_first_name}</u>, '
                  f'kaip galiu jums padėti?</b> \U0001F642',
-            918: f'<b>Բարև <u>{user}</u>, '
+            918: f'<b>Բարև <u>{user_first_name}</u>, '
                  f'ինչպես կարող եմ օգնել ձեզ?</b> \U0001F642',
-            919: f'<b>Sawubona <u>{user}</u>, '
+            919: f'<b>Sawubona <u>{user_first_name}</u>, '
                  f'ngicela ngingakusiza njani?</b> \U0001F642',
-            920: f'<b>Γειά σας <u>{user}</u>, '
+            920: f'<b>Γειά σας <u>{user_first_name}</u>, '
                  f'πώς μπορώ να σε βοηθήσω?</b> \U0001F642',
-            'default': f'<b><u>{user}</u>, '
+            'default': f'<b><u>{user_first_name}</u>, '
                        f'чем я могу вам помочь?</b> \U0001F642'
         }
 
         message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_message(message.chat.id, message_text,
-                                         parse_mode='html',
-                                         reply_markup=markup).message_id))
+        new_message_id = BOT.send_message(
+            message.chat.id,
+            message_text,
+            parse_mode='html',
+            reply_markup=markup
+        ).message_id
 
-    users_db.commit()
-    users_db.close()
+        session.add(
+            Message(
+                chat_id=user_record.id,
+                message_id=new_message_id,
+                date_added=current_time()
+            )
+        )
+        session.commit()
 
 
 @BOT.message_handler(commands=['clean'])

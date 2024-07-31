@@ -27,7 +27,12 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(unique=True)
     username: Mapped[str] = mapped_column(String(32))
-    last_tarot_date: Mapped[str] = mapped_column(String(20))
+    user_first_name: Mapped[str] = mapped_column(String(32))
+    last_tarot_date: Mapped[str] = mapped_column(
+        String(20),
+        nullable=True,
+        default=None
+    )
 
     messages = relationship('Message', back_populates='user')
 
