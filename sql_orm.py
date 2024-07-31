@@ -1,9 +1,10 @@
+from datetime import datetime
 from os import getenv
 
+from dotenv import load_dotenv
 from sqlalchemy import String, ForeignKey, create_engine
 from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
-                            relationship)
-from dotenv import load_dotenv
+                            relationship, Session)
 
 load_dotenv()
 
@@ -15,6 +16,14 @@ DB_HOST = getenv('DB_HOST')
 DATABASE_URL = f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}'
 
 engine = create_engine(DATABASE_URL)
+
+
+def current_time():
+    """
+    :return: Current time in format %Y-%m-%d %H:%M:%S
+    """
+    datetime_now_split = str(datetime.now()).split('.')
+    return datetime_now_split[0]
 
 
 class Base(DeclarativeBase):
@@ -43,6 +52,24 @@ class Message(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(ForeignKey('Users.id'))
     message_id: Mapped[int] = mapped_column()
-    date_added: Mapped[str] = mapped_column(String(20))
+    date_added: Mapped[str] = mapped_column(
+        default=current_time
+    )
 
     user = relationship('User', back_populates='messages')
+
+
+def record_message_id_to_db(chat_id: int, message_id: int):
+    """
+    Record message id's to DB, for 'clean' func.
+    :return: Nothing
+    """
+    with Session(engine) as session:
+        session.add(
+            Message(
+                chat_id=chat_id,
+                message_id=message_id,
+            )
+        )
+
+        session.commit()

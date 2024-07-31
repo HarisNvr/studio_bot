@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from glob import glob
 from os import getenv, path, getcwd
 from random import choice, randint
-from sqlite3 import connect
 from sys import platform
 from time import sleep
 
@@ -13,7 +12,7 @@ from sqlalchemy.orm import Session
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
 
-from sql_orm import engine, Message, User
+from sql_orm import engine, record_message_id_to_db, Message, User
 
 load_dotenv()
 
@@ -31,14 +30,6 @@ ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
-
-
-def current_time():
-    """
-    :return: Current time in format %Y-%m-%d %H:%M:%S
-    """
-    datetime_now_split = str(datetime.now()).split('.')
-    return datetime_now_split[0]
 
 
 def morning_routine():
@@ -154,32 +145,19 @@ def start_help(message, keep_last_msg: bool = False):
             session.add(user_record)
             session.commit()
 
-    if message.text == '/start':
-        new_message = Message(
-            chat_id=user_record.id,
-            message_id=message.message_id,
-            date_added=current_time()
-        )
-        session.add(new_message)
-        session.commit()
+    record_message_id_to_db(user_record.id, message.message_id)
 
-        new_message_id = BOT.send_message(
+    if message.text == '/start':
+        new_message = BOT.send_message(
             message.chat.id,
             f'<b>Здравствуйте, <u>{user_first_name}</u>! \U0001F642'
             f'\nМеня зовут {BOT.get_me().username}.</b>'
             f'\nЧем я могу вам помочь?',
             parse_mode='html',
             reply_markup=markup
-        ).message_id
-
-        session.add(
-            Message(
-                chat_id=user_record.id,
-                message_id=new_message_id,
-                date_added=current_time()
-            )
         )
-        session.commit()
+
+        record_message_id_to_db(user_record.id, new_message.message_id)
     else:
         if not keep_last_msg:
             BOT.delete_message(message.chat.id, message.id)
@@ -236,21 +214,14 @@ def start_help(message, keep_last_msg: bool = False):
         }
 
         message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
-        new_message_id = BOT.send_message(
+        new_message = BOT.send_message(
             message.chat.id,
             message_text,
             parse_mode='html',
             reply_markup=markup
-        ).message_id
-
-        session.add(
-            Message(
-                chat_id=user_record.id,
-                message_id=new_message_id,
-                date_added=current_time()
-            )
         )
-        session.commit()
+
+        record_message_id_to_db(user_record.id, new_message.message_id)
 
 
 @BOT.message_handler(commands=['clean'])
