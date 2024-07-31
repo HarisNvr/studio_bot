@@ -236,7 +236,7 @@ def clean(message):
     btn_net = types.InlineKeyboardButton(text='Нет', callback_data='help')
     markup.row(btn_da, btn_net)
     BOT.delete_message(message.chat.id, message.id)
-    sleep(0.5)
+    sleep(DEL_TIME)
     cursor.execute(
         'INSERT INTO message_ids (chat_id, message_id)'
         ' VALUES (?, ?)',
