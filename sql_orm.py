@@ -2,7 +2,7 @@ from datetime import datetime
 from os import getenv
 
 from dotenv import load_dotenv
-from sqlalchemy import String, ForeignKey, create_engine
+from sqlalchemy import String, ForeignKey, create_engine, select, func
 from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
                             relationship, Session)
 
@@ -15,15 +15,18 @@ DB_HOST = getenv('DB_HOST')
 
 DATABASE_URL = f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}'
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    echo=getenv('ENGINE_ECHO', '').lower() == 'true'
+)
 
 
 def current_time():
     """
     :return: Current time in format %Y-%m-%d %H:%M:%S
     """
-    datetime_now_split = str(datetime.now()).split('.')
-    return datetime_now_split[0]
+
+    return str(datetime.now()).split('.')[0]
 
 
 class Base(DeclarativeBase):
@@ -59,11 +62,38 @@ class Message(Base):
     user = relationship('User', back_populates='messages')
 
 
+def get_user_db_id(chat_id: int):
+    """
+    Retrieves the user's primary key from the database using the chat id.
+    :param chat_id:
+    :return: User's primary key - ID
+    """
+
+    with Session(engine) as session:
+        stmt = select(User).where(User.chat_id == chat_id)
+        result = session.execute(stmt).scalar()
+
+    return result.id
+
+
+def get_users_count():
+    """
+    Counts the number of users in the database.
+    :return: User's count
+    """
+
+    with Session(engine) as session:
+        count = session.query(func.count(User.id)).scalar()
+
+    return count
+
+
 def record_message_id_to_db(chat_id: int, message_id: int):
     """
     Record message id's to DB, for 'clean' func.
     :return: Nothing
     """
+
     with Session(engine) as session:
         session.add(
             Message(

@@ -152,6 +152,4 @@ media/
 # папки и файлы разработки
 Etc/
 UsersDB.sql
-Test.py
 alembic/versions/*
-/Postgre_print_all.py

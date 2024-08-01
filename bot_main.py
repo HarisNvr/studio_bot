@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
 
-from sql_orm import engine, record_message_id_to_db, Message, User
+from sql_orm import engine, record_message_id_to_db, Message, User, \
+    get_user_db_id, get_users_count
 
 load_dotenv()
 
@@ -29,6 +30,8 @@ BROADCAST_FUNC_MESSAGES_IDS = []
 ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
+
+
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
 
 
@@ -38,6 +41,7 @@ def morning_routine():
     to delete messages that are older than 48 hours.
     :return: Nothing
     """
+
     threshold = datetime.now() - timedelta(hours=51)
 
     with Session(engine) as session:
@@ -78,7 +82,7 @@ def check_bd_chat_id(func):
 
 def check_is_admin(func):
     """
-    Decorator to check if a user is admin
+    A decorator that checks whether the user is an admin.
 
     :param func: The function to be decorated.
     :return: The decorated function.
@@ -120,7 +124,8 @@ def start_help(message, keep_last_msg: bool = False):
     if chat_id in ADMIN_IDS:
         btn_admin = types.InlineKeyboardButton(
             '\U0001F60E Кнопка администратора \U0001F60E',
-            callback_data='admin')
+            callback_data='admin'
+        )
         markup.row(btn_admin)
 
     with Session(engine) as session:
@@ -148,7 +153,7 @@ def start_help(message, keep_last_msg: bool = False):
     record_message_id_to_db(user_record.id, message.message_id)
 
     if message.text == '/start':
-        new_message = BOT.send_message(
+        sent_message = BOT.send_message(
             message.chat.id,
             f'<b>Здравствуйте, <u>{user_first_name}</u>! \U0001F642'
             f'\nМеня зовут {BOT.get_me().username}.</b>'
@@ -157,7 +162,7 @@ def start_help(message, keep_last_msg: bool = False):
             reply_markup=markup
         )
 
-        record_message_id_to_db(user_record.id, new_message.message_id)
+        record_message_id_to_db(user_record.id, sent_message.message_id)
     else:
         if not keep_last_msg:
             BOT.delete_message(message.chat.id, message.id)
@@ -214,135 +219,138 @@ def start_help(message, keep_last_msg: bool = False):
         }
 
         message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
-        new_message = BOT.send_message(
+        sent_message = BOT.send_message(
             message.chat.id,
             message_text,
             parse_mode='html',
             reply_markup=markup
         )
 
-        record_message_id_to_db(user_record.id, new_message.message_id)
+        record_message_id_to_db(user_record.id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['clean'])
 @check_bd_chat_id
 def clean(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_da = types.InlineKeyboardButton(text='Да',
                                         callback_data='delete_message')
     btn_net = types.InlineKeyboardButton(text='Нет', callback_data='help')
     markup.row(btn_da, btn_net)
-    BOT.delete_message(message.chat.id, message.id)
-    sleep(DEL_TIME)
-    cursor.execute(
-        'INSERT INTO message_ids (chat_id, message_id)'
-        ' VALUES (?, ?)',
-        (message.chat.id,
-         BOT.send_message(
-             message.chat.id,
-             f"Вы хотите полностью очистить этот чат?"
-             f"\n"
-             f"\n*Сообщения, отправленные более 48ч. назад и рассылка "
-             f"удалены не будут",
-             reply_markup=markup).message_id))
 
-    users_db.commit()
-    users_db.close()
+    BOT.delete_message(chat_id, message.id)
+    sleep(DEL_TIME)
+
+    sent_message = BOT.send_message(
+        message.chat.id,
+        f'Вы хотите полностью очистить этот чат?'
+        f'\n\n*Сообщения, отправленные более 48ч. назад и рассылка '
+        f'удалены не будут',
+        reply_markup=markup
+    )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def delete_message(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
-    cursor.execute('SELECT message_id FROM message_ids WHERE chat_id = ?',
-                   (message.chat.id,))
-    message_ids = cursor.fetchall()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
-    BOT.delete_message(message.chat.id, message.id)
-    sent_message = BOT.send_message(message.chat.id,
-                                    f"<b>Идёт очистка чата</b> \U0001F9F9",
-                                    parse_mode='html')
+    with Session(engine) as session:
+        message_ids = session.execute(
+            select(
+                Message.message_id
+            ).where(
+                Message.chat_id == user_db_id
+            )
+        ).scalars().all()
 
-    for message_id in message_ids:
-        cursor.execute(
-            'DELETE FROM message_ids WHERE chat_id = ? AND message_id = ?',
-            (message.chat.id, message_id[0]))
-        users_db.commit()
-        try:
-            BOT.delete_message(message.chat.id, message_id[0])
-            sleep(0.01)
-        except ApiTelegramException:
-            pass
+        BOT.delete_message(chat_id, message.id)
 
-    users_db.close()
+        sent_message = BOT.send_message(
+            chat_id,
+            f'<b>Идёт очистка чата</b> \U0001F9F9',
+            parse_mode='html'
+        )
+
+        for msg_id in message_ids:
+            try:
+                BOT.delete_message(chat_id, msg_id)
+                sleep(0.01)
+            except ApiTelegramException:
+                pass
+
+            session.execute(
+                delete(
+                    Message
+                ).where(
+                    Message.chat_id == user_db_id,
+                    Message.message_id == msg_id)
+            )
+            session.commit()
 
     BOT.delete_message(sent_message.chat.id, sent_message.message_id)
 
 
 def admin(message):  # Админское меню
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
     markup.row(btn_back)
+
     BOT.delete_message(message.chat.id, message.id)
     sleep(DEL_TIME)
-    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                   ' VALUES (?, ?)',
-                   (message.chat.id,
-                    BOT.send_message(
-                        message.chat.id,
-                        '<b>Добро пожаловать в админское меню!</b>'
-                        '\n'
-                        '\n/broadcast - Начать процедуру рассылки'
-                        '\n'
-                        '\n/users - Узнать сколько пользователей в БД'
-                        '\n'
-                        '\n/proportions - Калькулятор пропорций',
-                        parse_mode='html',
-                        reply_markup=markup).message_id))
 
-    users_db.commit()
-    users_db.close()
+    sent_message = BOT.send_message(
+        message.chat.id,
+        '<b>Добро пожаловать в админское меню!</b>'
+        '\n'
+        '\n/broadcast - Начать процедуру рассылки'
+        '\n'
+        '\n/users - Узнать сколько пользователей в БД'
+        '\n'
+        '\n/proportions - Калькулятор пропорций',
+        parse_mode='html',
+        reply_markup=markup
+    )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['proportions'])
 @check_is_admin
-def proportions(message, debug: bool = False):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+def proportions(message, keep_last_msg: bool = False):
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
-    if not debug:
+    if not keep_last_msg:
         BOT.delete_message(message.chat.id, message.id)
         sleep(DEL_TIME)
-    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                   ' VALUES (?, ?)', (
-                       message.chat.id,
-                       BOT.send_message(
-                           message.chat.id,
-                           f'Введите через пробел: '
-                           f'\nПропорции компонентов '
-                           f'<b>A</b> и <b>B</b>, '
-                           f'и общую массу - <b>C</b>',
-                           parse_mode='html').message_id))
+
+    sent_message = BOT.send_message(
+        message.chat.id,
+        f'Введите через пробел: '
+        f'\nПропорции компонентов '
+        f'<b>A</b> и <b>B</b>, '
+        f'и общую массу - <b>C</b>',
+        parse_mode='html'
+    )
+
     BOT.register_next_step_handler(message, calculate_proportions)
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def calculate_proportions(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
-    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                   ' VALUES (?, ?)',
-                   (message.chat.id,
-                    message.message_id))
-    users_db.commit()
+    record_message_id_to_db(user_db_id, message.message_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_another_one = types.InlineKeyboardButton(
@@ -378,63 +386,51 @@ def calculate_proportions(message):
         b_new = int(b_gr) if b_gr.is_integer() else round(b_gr, 2)
         c_new = int(c_input) if c_input.is_integer() else round(c_input, 2)
 
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)', (
-                           message.chat.id,
-                           BOT.reply_to(
-                               message,
-                               f'Для раствора массой: <b>{c_new} гр.'
-                               f'\nНеобходимо:</b>'
-                               f'\n<b>{a_new} гр.</b> Компонента <b>A</b> '
-                               f'({a_part_new} %)'
-                               f'\n<b>{b_new} гр.</b> Компонента <b>B</b> '
-                               f'({b_part_new} %)',
-                               reply_markup=markup,
-                               parse_mode='html').message_id))
+        sent_message = BOT.reply_to(
+            message,
+            f'Для раствора массой: <b>{c_new} гр.'
+            f'\nНеобходимо:</b>'
+            f'\n<b>{a_new} гр.</b> Компонента <b>A</b> '
+            f'({a_part_new} %)'
+            f'\n<b>{b_new} гр.</b> Компонента <b>B</b> '
+            f'({b_part_new} %)',
+            reply_markup=markup,
+            parse_mode='html'
+        )
     else:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)', (
-                           message.chat.id,
-                           BOT.send_message(
-                               message.chat.id,
-                               f"Неверный формат данных."
-                               f"\nПожалуйста, "
-                               f"введите числа по образцу:\n<b>A B C</b>",
-                               parse_mode='html').message_id))
+        sent_message = BOT.send_message(
+            message.chat.id,
+            f'Неверный формат данных.'
+            f'\nПожалуйста, '
+            f'введите числа по образцу:\n<b>A B C</b>',
+            parse_mode='html'
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['users'])
 @check_is_admin
-def get_users_count(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
-    cursor.execute("SELECT COUNT(username) FROM polzovately")
-    count = cursor.fetchone()[0]
+def send_user_count(message):
+    chat_id = message.chat.id
+    count = get_users_count()
+
+    BOT.delete_message(chat_id, message.id)
 
     sent_message = BOT.send_message(
-        message.chat.id,
-        f"Количество пользователей в БД: {count}"
+        chat_id,
+        f'Количество пользователей в БД: {count}'
     )
 
-    BOT.delete_message(message.chat.id, message.id)
-
-    users_db.close()
-
     sleep(3.5)
-
-    BOT.delete_message(sent_message.chat.id, sent_message.message_id)
+    BOT.delete_message(chat_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['broadcast'])
 @check_is_admin
 def start_broadcast(message):
     global BROADCAST_ADMIN_ID
-
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
 
     markup = types.InlineKeyboardMarkup()
     btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
@@ -443,38 +439,31 @@ def start_broadcast(message):
 
     if BROADCAST_ADMIN_ID is None:
         BROADCAST_ADMIN_ID = message.from_user.id
-        BOT.delete_message(message.chat.id, message.id)
+        BOT.delete_message(chat_id, message.id)
         sleep(DEL_TIME)
 
-        BROADCAST_FUNC_MESSAGES_IDS.append(
-            (BOT.send_message(message.chat.id,
-                              "Отправьте сообщение для рассылки",
-                              reply_markup=markup)).message_id
+        sent_message = BOT.send_message(
+            message.chat.id,
+            'Отправьте сообщение для рассылки',
+            reply_markup=markup
         )
 
+        BROADCAST_FUNC_MESSAGES_IDS.append(sent_message.message_id)
+
         BOT.register_next_step_handler(message, confirm_broadcast)
-
     else:
-        new_message_id = BOT.send_message(
+        sent_message = BOT.send_message(
             message.chat.id,
-            "Сейчас идёт рассылка другого администратора"
-        ).message_id
+            'Сейчас идёт рассылка другого администратора'
+        )
 
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id, new_message_id))
-
-    users_db.commit()
-    users_db.close()
+        record_message_id_to_db(chat_id, sent_message.message_id)
 
 
 def confirm_broadcast(message):
     global BROADCAST_MESSAGE
 
     if BROADCAST_ADMIN_ID is not None:
-        users_db = connect('UsersDB.sql')
-        cursor = users_db.cursor()
-
         BROADCAST_MESSAGE = message
         BROADCAST_FUNC_MESSAGES_IDS.append(BROADCAST_MESSAGE.id)
 
@@ -492,15 +481,16 @@ def confirm_broadcast(message):
 
         markup.add(btn_send_broadcast, btn_cancel_broadcast)
 
-        BROADCAST_FUNC_MESSAGES_IDS.append(
-            (BOT.send_message(message.chat.id, 'Разослать сообщение?',
-                              reply_markup=markup)).id)
+        sent_message = BOT.send_message(
+            message.chat.id,
+            'Разослать сообщение?',
+            reply_markup=markup
+        )
 
-        users_db.commit()
-        users_db.close()
+        BROADCAST_FUNC_MESSAGES_IDS.append(sent_message.message_id)
 
 
-@BOT.callback_query_handler(func=lambda call: call.data == "send_broadcast")
+@BOT.callback_query_handler(func=lambda call: call.data == 'send_broadcast')
 def send_broadcast(call):
     global BROADCAST_MESSAGE
     global BROADCAST_ADMIN_ID
@@ -508,11 +498,8 @@ def send_broadcast(call):
 
     BOT.answer_callback_query(call.id)
 
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
-    cursor.execute("SELECT chat_id FROM polzovately")
-    chat_ids = cursor.fetchall()
-    users_db.close()
+    with Session(engine) as session:
+        chat_ids = session.execute(select(User.chat_id)).scalars().all()
 
     broadcast_type = BROADCAST_MESSAGE.content_type
 
@@ -525,22 +512,22 @@ def send_broadcast(call):
     sent_message = BOT.send_message(call.message.chat.id,
                                     text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>',
                                     parse_mode='html')
-    start_time = datetime.now().strftime("%d-%m-%Y %H:%M").split('.')[0]
+    start_time = datetime.now().strftime('%d-%m-%Y %H:%M').split('.')[0]
 
     if broadcast_type == 'photo':
         broadcast_function = BOT.send_photo
         content_args = {'caption': BROADCAST_MESSAGE.caption}
         content_value = BROADCAST_MESSAGE.photo[-1].file_id
-    elif broadcast_type == 'text':
+    else:
         broadcast_function = BOT.send_message
         content_args = {}
         content_value = BROADCAST_MESSAGE.text
 
     send_count = 0
     for chat_id in chat_ids:
-        if str(chat_id[0]) != str(BROADCAST_ADMIN_ID):
+        if chat_id != BROADCAST_ADMIN_ID:
             try:
-                broadcast_function(chat_id[0], content_value, **content_args)
+                broadcast_function(chat_id, content_value, **content_args)
                 send_count += 1
                 sleep(0.1)
             except ApiTelegramException:
