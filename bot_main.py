@@ -9,10 +9,15 @@ from dotenv import load_dotenv
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
-from telebot import TeleBot, types
+from telebot import types
 from telebot.apihelper import ApiTelegramException
 
+from constants import ADMIN_IDS, BOT, DEL_TIME, ORG_NAME
 from dicts import get_lang_greet_text
+from directions import (
+    candles_info, custom_cloth, gips_info, epoxy,
+    sketching, tie_dye_info
+)
 from sql_orm import (
     engine, record_message_id_to_db, Message, User, get_user_db_id,
     get_users_count, morning_routine
@@ -22,22 +27,12 @@ load_dotenv()
 
 morning_routine()
 
-BOT = TeleBot(getenv('BOT'))
-ORG_NAME = getenv('ORG_NAME')
-
-DEL_TIME = 0.5
-'''Time between deleting old message and sending a new one'''
-
 BROADCAST_ADMIN_ID = None
 BROADCAST_MESSAGE = None
 BROADCAST_FUNC_MESSAGES_IDS = []
 
-ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
-
-
-# .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
 
 
 def check_bd_chat_id(func):
@@ -90,18 +85,30 @@ def start_help(message, keep_last_msg: bool = False):
     username = message.chat.username
 
     markup = types.InlineKeyboardMarkup()
-    btn_soc_profiles = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1',
-                                                  callback_data='soc_profiles')
-    btn_shop = types.InlineKeyboardButton(text='Наш магазин  \U0001F6CD',
-                                          callback_data='shop')
-    btn_studio = types.InlineKeyboardButton(text='О студии \U0001F393',
-                                            callback_data='studio')
-    btn_offsite = types.InlineKeyboardButton(text='Выездные МК  \U0001F30D',
-                                             callback_data='offsite_workshops')
-    btn_tarot = types.InlineKeyboardButton(text='Карты ТАРО \U00002728',
-                                           callback_data='tarot')
-    btn_clean = types.InlineKeyboardButton(text=f'Очистить чат \U0001F9F9',
-                                           callback_data='clean')
+    btn_soc_profiles = types.InlineKeyboardButton(
+        text='#МыВСети \U0001F4F1',
+        callback_data='soc_profiles'
+    )
+    btn_shop = types.InlineKeyboardButton(
+        text='Наш магазин  \U0001F6CD',
+        callback_data='shop'
+    )
+    btn_studio = types.InlineKeyboardButton(
+        text='О студии \U0001F393',
+        callback_data='studio'
+    )
+    btn_offsite = types.InlineKeyboardButton(
+        text='Выездные МК  \U0001F30D',
+        callback_data='offsite_workshops'
+    )
+    btn_tarot = types.InlineKeyboardButton(
+        text='Карты ТАРО \U00002728',
+        callback_data='tarot'
+    )
+    btn_clean = types.InlineKeyboardButton(
+        text=f'Очистить чат \U0001F9F9',
+        callback_data='clean'
+    )
     markup.row(btn_studio, btn_shop)
     markup.row(btn_offsite, btn_soc_profiles)
     markup.row(btn_tarot, btn_clean)
@@ -174,9 +181,14 @@ def clean(message):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-    btn_da = types.InlineKeyboardButton(text='Да',
-                                        callback_data='delete_message')
-    btn_net = types.InlineKeyboardButton(text='Нет', callback_data='help')
+    btn_da = types.InlineKeyboardButton(
+        text='Да',
+        callback_data='delete_message'
+    )
+    btn_net = types.InlineKeyboardButton(
+        text='Нет',
+        callback_data='help'
+    )
     markup.row(btn_da, btn_net)
 
     BOT.delete_message(chat_id, message.id)
@@ -238,7 +250,10 @@ def admin(message):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='help'
+    )
     markup.row(btn_back)
 
     BOT.delete_message(chat_id, message.id)
@@ -372,8 +387,10 @@ def start_broadcast(message):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-    btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
-                                                      callback_data='cancel')
+    btn_cancel_broadcast = types.InlineKeyboardButton(
+        'Отменить',
+        callback_data='cancel'
+    )
     markup.add(btn_cancel_broadcast)
 
     if BROADCAST_ADMIN_ID is None:
@@ -484,10 +501,11 @@ def send_broadcast(call):
     else:
         users_get = 'пользователей получили'
 
-    broadcast_success = (f'<b>{send_count}</b> {users_get} рассылку от:'
-                         f'\n\n\U0001F4C7 {start_time.split()[0]}'
-                         f'\n\n\U0000231A {start_time.split()[1]}'
-                         )
+    broadcast_success = (
+        f'<b>{send_count}</b> {users_get} рассылку от:'
+        f'\n\n\U0001F4C7 {start_time.split()[0]}'
+        f'\n\n\U0000231A {start_time.split()[1]}'
+    )
 
     BOT.send_message(
         chat_id,
@@ -649,11 +667,18 @@ def studio(message):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-    btn_dirs = types.InlineKeyboardButton('Подробнее о направлениях',
-                                          callback_data='directions')
-    btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
-    btn_2gis = types.InlineKeyboardButton(text='Наша студия в 2GIS',
-                                          url='https://go.2gis.com/8od46')
+    btn_dirs = types.InlineKeyboardButton(
+        'Подробнее о направлениях',
+        callback_data='directions'
+    )
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='help'
+    )
+    btn_2gis = types.InlineKeyboardButton(
+        text='Наша студия в 2GIS',
+        url='https://go.2gis.com/8od46'
+    )
     btn_tg_dm = types.InlineKeyboardButton(
         text='\U000026A1 Записаться на МК \U000026A1',
         url='https://t.me/elenitsa17'
@@ -695,35 +720,42 @@ def directions(message, offsite=False):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-
-    btn_epoxy = types.InlineKeyboardButton(text='Эпоксидная смола',
-                                           callback_data='epoxy')
-
-    btn_gips = types.InlineKeyboardButton(text='Гипс',
-                                          callback_data='gips'
-                                          if not offsite
-                                          else 'gips_offsite')
-
-    btn_sketching = types.InlineKeyboardButton(text='Скетчинг',
-                                               callback_data='sketching')
-
-    btn_tie_dye = types.InlineKeyboardButton(text='Тай-Дай',
-                                             callback_data='tie_dye'
-                                             if not offsite
-                                             else 'tie_dye_offsite')
-
-    btn_custom_cloth = types.InlineKeyboardButton(text='Роспись одежды',
-                                                  callback_data='custom_cloth')
-
-    btn_candles = types.InlineKeyboardButton(text='Свечеварение',
-                                             callback_data='candles'
-                                             if not offsite
-                                             else 'candles_offsite')
-
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data='studio'
-                                          if not offsite
-                                          else 'offsite_workshops')
+    btn_epoxy = types.InlineKeyboardButton(
+        text='Эпоксидная смола',
+        callback_data='epoxy'
+    )
+    btn_gips = types.InlineKeyboardButton(
+        text='Гипс',
+        callback_data='gips'
+        if not offsite
+        else 'gips_offsite'
+    )
+    btn_sketching = types.InlineKeyboardButton(
+        text='Скетчинг',
+        callback_data='sketching'
+    )
+    btn_tie_dye = types.InlineKeyboardButton(
+        text='Тай-Дай',
+        callback_data='tie_dye'
+        if not offsite
+        else 'tie_dye_offsite'
+    )
+    btn_custom_cloth = types.InlineKeyboardButton(
+        text='Роспись одежды',
+        callback_data='custom_cloth'
+    )
+    btn_candles = types.InlineKeyboardButton(
+        text='Свечеварение',
+        callback_data='candles'
+        if not offsite
+        else 'candles_offsite'
+    )
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='studio'
+        if not offsite
+        else 'offsite_workshops'
+    )
 
     if not offsite:
         markup.row(btn_epoxy, btn_gips)
@@ -756,7 +788,10 @@ def offsite_workshops(message):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='help'
+    )
 
     btn_tg_dm = types.InlineKeyboardButton(
         text='\U000026A1 Забронировать МК \U000026A1',
@@ -811,18 +846,30 @@ def shop(message):
     user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
-    btn_catalog_main = types.InlineKeyboardButton('Каталог \U0001F50D',
-                                                  callback_data='catalog')
-    btn_shipment = types.InlineKeyboardButton('Доставка \U0001F4E6',
-                                              callback_data='shipment')
-    btn_order = types.InlineKeyboardButton('Как заказать \U00002705',
-                                           callback_data='order')
-    btn_pay = types.InlineKeyboardButton('Оплата \U0001F4B3',
-                                         callback_data='pay')
+    btn_catalog_main = types.InlineKeyboardButton(
+        'Каталог \U0001F50D',
+        callback_data='catalog'
+    )
+    btn_shipment = types.InlineKeyboardButton(
+        'Доставка \U0001F4E6',
+        callback_data='shipment'
+    )
+    btn_order = types.InlineKeyboardButton(
+        'Как заказать \U00002705',
+        callback_data='order'
+    )
+    btn_pay = types.InlineKeyboardButton(
+        'Оплата \U0001F4B3',
+        callback_data='pay'
+    )
     btn_tg_dm = types.InlineKeyboardButton(
         text='\U000026A1 Связаться с нами \U000026A1',
-        url='https://t.me/elenitsa17')
-    btn_back = types.InlineKeyboardButton('Назад', callback_data='help')
+        url='https://t.me/elenitsa17'
+    )
+    btn_back = types.InlineKeyboardButton(
+        'Назад',
+        callback_data='help'
+    )
     markup.row(btn_order, btn_catalog_main)
     markup.row(btn_pay, btn_shipment)
     markup.row(btn_tg_dm)
@@ -868,6 +915,8 @@ def catalog(call):
             chat_id,
             catalog_pdf,
             caption='Представляем наш каталог в формате PDF!'
+                    '\n\n<u>Не является публичной офертой! '
+                    '\nАктуальные цены уточняйте у сотрудников студии.</u>'
                     '\n\n<b>Редакция от 13.07.2023</b>',
             parse_mode='html'
         )
@@ -884,7 +933,10 @@ def shipment(message):
         text='\U000026A1 Связаться с нами \U000026A1',
         url='https://t.me/elenitsa17'
     )
-    btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
+    btn_back = types.InlineKeyboardButton(
+        'Назад',
+        callback_data='shop'
+    )
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
@@ -935,7 +987,10 @@ def payment(message):
         url='https://t.me/elenitsa17'
     )
 
-    btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
+    btn_back = types.InlineKeyboardButton(
+        'Назад',
+        callback_data='shop'
+    )
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
@@ -981,7 +1036,10 @@ def ordering(message):
         url='https://t.me/elenitsa17'
     )
 
-    btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
+    btn_back = types.InlineKeyboardButton(
+        'Назад',
+        callback_data='shop'
+    )
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
@@ -1086,363 +1144,6 @@ def soc_profiles(message):
         parse_mode='html',
         reply_markup=markup
     )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def epoxy(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data='directions')
-
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='\U000026A1 Записаться на МК \U000026A1',
-        url='https://t.me/elenitsa17'
-    )
-
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/epoxy_img.png', 'rb') as img_epoxy:
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_epoxy,
-            caption=f'<b>Эпоксидная смола</b> - это '
-                    f'универсальный '
-                    f'материал, который позволяет '
-                    f'создавать разнообразные изделия и '
-                    f'декоративные элементы.'
-                    f'\n'
-                    f'\n На нашем занятии вы '
-                    f'научитесь основам '
-                    f'заливки. Мы покажем вам '
-                    f'различные техники, '
-                    f'а также расскажем о тонкостях '
-                    f'при работе '
-                    f'со смолой. Вы сможете создать свои '
-                    f'уникальные и неповторимые '
-                    f'изделия из смолы.'
-                    f'\n'
-                    f'\n Смола застывает в течении 24 часов. '
-                    f'Своё изделие вы сможете забрать уже на '
-                    f'следующий день. После отвердевания, '
-                    f'смола становится безвредной и может '
-                    f'контактировать с холодными продуктами.'
-                    f'\n'
-                    f'\n Мы обеспечим вам '
-                    f'необходимую защитную '
-                    f'экипировку: перчатки, респираторы и '
-                    f'фартуки. Занятия проводятся в хорошо '
-                    f'проветриваемом помещении.'
-                    f'\n'
-                    f'\n<u>Уточняйте актуальное расписание, '
-                    f'перечень изделий и наличие '
-                    f'мест у мастера!</u>',
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def gips_info(message, offsite=False):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    if offsite:
-        btn_text = '\U000026A1 Забронировать МК \U000026A1'
-        additional_info = (
-            '<u>Минимальное количество человек, перечень '
-            'изделий и стоимость выезда на локацию проведения '
-            'уточняйте у мастера!</u>'
-        )
-        callback_data = 'directions_offsite'
-    else:
-        btn_text = '\U000026A1 Записаться на МК \U000026A1'
-        additional_info = (
-            '<u>Уточняйте актуальное расписание, '
-            f'перечень изделий и наличие '
-            f'мест у мастера!</u>'
-        )
-        callback_data = 'directions'
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data=callback_data)
-    btn_tg_dm = types.InlineKeyboardButton(text=btn_text,
-                                           url='https://t.me/elenitsa17')
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/gips_img.png', 'rb') as img_gips:
-        caption = (
-            f'<b>Гипс</b> - это универсальный '
-            f'и простой в работе материал, '
-            f'из которого можно создавать различные предметы декора и '
-            f'подарки.'
-            f'\n\n На нашем занятии вы познакомитесь с основами '
-            f'литья из гипса и узнаете, как изготавливать гипсовые '
-            f'изделия своими руками. '
-            f'Мы научим вас правильно замешивать '
-            f'гипсовый раствор, расскажем '
-            f'о секретах получения крепкого, '
-            f'ровного изделия с минимальным количеством пузырей.'
-            f'\n\n Вы сможете создать свои неповторимые '
-            f'изделия и украсить дом. Так же гипсовые изделия – это '
-            f'отличный подарок, сделанный своими руками.'
-            f'\n\n{additional_info}'
-        )
-
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_gips,
-            caption=caption,
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def sketching(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data='directions')
-
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='\U000026A1 Записаться на МК \U000026A1',
-        url='https://t.me/elenitsa17'
-    )
-
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/sketching_img.png',
-              'rb') as img_sketching:
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_sketching,
-            caption='<b>Скетчинг</b> - это техника быстрого '
-                    'рисования набросков и эскизов, которая '
-                    'помогает визуализировать идеи, эмоции и '
-                    'впечатления. На нашем '
-                    'занятии вы узнаете, '
-                    'как рисовать скетчи от '
-                    'руки с помощью разных '
-                    'материалов: карандашей, '
-                    'маркеров, пастели. '
-                    '\n'
-                    '\n  Вы научитесь выбирать '
-                    'подходящие объекты '
-                    'для скетчинга, определять перспективу и '
-                    'светотень, создавать '
-                    'композицию и цветовую '
-                    'гамму. Мы покажем вам различные стили и '
-                    'техники скетчинга. '
-                    '\n'
-                    '\n  Вы сможете создать свои уникальные '
-                    'скетчи на любые темы: '
-                    'природа, архитектура, '
-                    'мода и многое другое.'
-                    '\n'
-                    '\n<u>Уточняйте актуальное расписание '
-                    'и наличие мест у мастера!</u>',
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def tie_dye_info(message, offsite=False):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    if offsite:
-        btn_text = '\U000026A1 Забронировать МК \U000026A1'
-        additional_info = ('<u>Минимальное количество человек, перечень '
-                           'изделий и стоимость выезда на локацию проведения '
-                           'уточняйте у мастера!</u>')
-        callback_data = 'directions_offsite'
-    else:
-        btn_text = '\U000026A1 Записаться на МК \U000026A1'
-        additional_info = ('<u>Уточняйте актуальное расписание'
-                           ' и наличие мест у мастера!</u>')
-        callback_data = 'directions'
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data=callback_data)
-    btn_tg_dm = types.InlineKeyboardButton(text=btn_text,
-                                           url='https://t.me/elenitsa17')
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/tie_dye_photo.png', 'rb') as img_tie_dye:
-        caption = (
-            f'<b>Тай-дай</b> - это техника '
-            f'окрашивания ткани при помощи '
-            f'скручивания, которая позволяет '
-            f'создавать яркие и '
-            f'оригинальные узоры. На нашем '
-            f'занятии вы узнаете, как делать '
-            f'тай-дай своими руками. Вы научитесь выбирать подходящие '
-            f'красители и способы завязывания '
-            f'ткани для получения разных '
-            f'эффектов.\n\n Мы покажем вам различные стили и техники '
-            f'тай-дай: от классического спирального до современного '
-            f'мраморного. Вы сможете создать '
-            f'свои уникальные вещи в стиле '
-            f'тай-дай: футболки, платья, джинсы, шопперы и '
-            f'другое.\n\n<b>А также при помощи тай-дай можно подарить '
-            f'вторую жизнь своей любимой '
-            f'вещи.</b>'
-            f'\n\n{additional_info}'
-        )
-
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_tie_dye,
-            caption=caption,
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def custom_cloth(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data='directions')
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='\U000026A1 Записаться на МК \U000026A1',
-        url='https://t.me/elenitsa17')
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/custom_cloth_img.png',
-              'rb') as img_custom_cloth:
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_custom_cloth,
-            caption='<b>Роспись одежды</b> - это творческий '
-                    'способ преобразить свои '
-                    'вещи и сделать их '
-                    'уникальными. На нашем '
-                    'занятии вы узнаете, '
-                    'как рисовать на ткани акриловыми '
-                    'красками и какие материалы, инструменты '
-                    'для этого нужны. '
-                    '\n'
-                    '\n  Вы научитесь выбирать '
-                    'подходящие рисунки '
-                    'и узоры, переносить их '
-                    'на одежду, а также '
-                    'использовать разные техники: от простых '
-                    'надписей, до полноценных картин. '
-                    'Мы покажем '
-                    'вам различные стили росписи: '
-                    'от классических '
-                    'цветочных мотивов до '
-                    'современных абстрактных '
-                    'рисунков. Вы сможете '
-                    'разрисовать свою одежду '
-                    'в соответствии со своим вкусом и стилем. '
-                    '\n'
-                    '\n  Мы используем специальные краски, '
-                    'которые не смываются с ткани. Поэтому '
-                    'расписанная вещь будет радовать '
-                    'вас очень долго.'
-                    '\n'
-                    '\n<u>Уточняйте актуальное расписание, '
-                    f'перечень изделий и наличие '
-                    f'мест у мастера!</u>',
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def candles_info(message, offsite=False):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    if offsite:
-        btn_text = '\U000026A1 Забронировать МК \U000026A1'
-        additional_info = ('<u>Минимальное количество человек, перечень '
-                           'изделий и стоимость выезда на локацию проведения '
-                           'уточняйте у мастера!</u>')
-        callback_data = 'directions_offsite'
-    else:
-        btn_text = '\U000026A1 Записаться на МК \U000026A1'
-        additional_info = ('<u>Уточняйте актуальное расписание, '
-                           f'перечень изделий и наличие '
-                           f'мест у мастера!</u>')
-        callback_data = 'directions'
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(text='Назад',
-                                          callback_data=callback_data)
-    btn_tg_dm = types.InlineKeyboardButton(text=btn_text,
-                                           url='https://t.me/elenitsa17')
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/candles_photo.png', 'rb') as img_candles:
-        caption = (
-            f'<b>Ароматические свечи</b> - это не '
-            f'только красивый и уютный '
-            f'элемент декора, но и способ создать особую атмосферу в '
-            f'доме.'
-            f'\n\n На нашем занятии вы создадите свечу своими руками '
-            f'из натуральных ингредиентов: соевого воска, '
-            f'хлопкового или деревянного фитиля. '
-            f'Вы сможете выбрать ароматы по своему вкусу '
-            f'(более 20 различных ароматов). '
-            f'Мы расскажем вам о '
-            f'тонкостях процесса изготовления свечей, а также о том, '
-            f'как правильно использовать и хранить их.'
-            f'\n\n Вы получите не только полезные знания и навыки, '
-            f'но и удовольствие от творчества и релаксации.'
-            f'\n\n{additional_info}'
-        )
-
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_candles,
-            caption=caption,
-            parse_mode='html',
-            reply_markup=markup
-        )
 
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
@@ -1557,30 +1258,65 @@ def chepuha(message, new_user: bool = False):
 def handle_callback(callback):
     callback_functions = {
         'admin': admin,
-        'another_proportion': lambda message: proportions(message, True),
-        'candles': candles_info,
-        'candles_offsite': lambda message: candles_info(message, offsite=True),
+        'another_proportion': lambda message: proportions(
+            message,
+            True
+        ),
+        'candles': lambda message: candles_info(
+            message,
+            BOT
+        ),
+        'candles_offsite': lambda message: candles_info(
+            message,
+            BOT,
+            offsite=True
+        ),
         'clean': clean,
-        'custom_cloth': custom_cloth,
+        'custom_cloth': lambda message: custom_cloth(
+            message,
+            BOT
+        ),
         'delete_message': delete_message,
         'directions': directions,
-        'directions_offsite': lambda message: directions(message,
-                                                         offsite=True),
-        'epoxy': epoxy,
-        'gips': gips_info,
-        'gips_offsite': lambda message: gips_info(message, offsite=True),
+        'directions_offsite': lambda message: directions(
+            message,
+            offsite=True
+        ),
+        'epoxy': lambda message: epoxy(
+            message,
+            BOT
+        ),
+        'gips': lambda message: gips_info(
+            message,
+            BOT
+        ),
+        'gips_offsite': lambda message: gips_info(
+            message,
+            BOT,
+            offsite=True
+        ),
         'help': start_help,
         'offsite_workshops': offsite_workshops,
         'order': ordering,
         'pay': payment,
         'shipment': shipment,
         'shop': shop,
-        'sketching': sketching,
+        'sketching': lambda message: sketching(
+            message,
+            BOT
+        ),
         'soc_profiles': soc_profiles,
         'studio': studio,
         'tarot': tarot_start,
-        'tie_dye': tie_dye_info,
-        'tie_dye_offsite': lambda message: tie_dye_info(message, offsite=True)
+        'tie_dye': lambda message: tie_dye_info(
+            message,
+            BOT
+        ),
+        'tie_dye_offsite': lambda message: tie_dye_info(
+            message,
+            BOT,
+            offsite=True
+        )
     }
 
     BOT.answer_callback_query(callback.id)
