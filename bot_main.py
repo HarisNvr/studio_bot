@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
 
+from dicts import get_lang_greet_text
 from sql_orm import (
     engine, record_message_id_to_db, Message, User, get_user_db_id,
     get_users_count, morning_routine
@@ -155,57 +156,9 @@ def start_help(message, keep_last_msg: bool = False):
 
         sleep(DEL_TIME)
 
-        lang = randint(1, 1000)
-
-        lang_greet_dict = {
-            900: f'<b>?ьчомоп мав угом я меч, '
-                 f'<u>{user_first_name[::-1]}</u></b> \U0001F643',
-            901: f'<b>नमस्ते <u>{user_first_name}</u>, '
-                 f'मैं आपकी कैसे मदद कर सकता हूँ?</b> \U0001F642',
-            902: f'<b>Greetings <u>{user_first_name}</u>, '
-                 f'how can I help you?</b> \U0001F642',
-            903: f'<b>¡Hola! <u>{user_first_name}</u>, '
-                 f'¿le puedo ayudar en algo?</b> \U0001F642',
-            904: f'<b>你好 <u>{user_first_name}</u>, '
-                 f'我怎么帮你？</b> \U0001F642',
-            906: f'<b>مرحبا <u>{user_first_name}</u>, كيف يمكنني مساعدتك؟'
-                 f'</b> \U0001F642',
-            907: f'<b>Merhaba <u>{user_first_name}</u>, '
-                 f'nasıl yardımcı olabilirim?</b> \U0001F642',
-            908: f'<b>Konnichiwa <u>{user_first_name}</u>, '
-                 f'dou tasukeraremasuka?</b> \U0001F642',
-            909: f'<b>Hallo <u>{user_first_name}</u>, '
-                 f'wie kann ich Ihnen helfen?</b> \U0001F642',
-            910: f'<b>Bonjour <u>{user_first_name}</u>, '
-                 f'comment puis-je vous aider?</b> \U0001F642',
-            911: f'<b>Ciao <u>{user_first_name}</u>, '
-                 f'come posso aiutarti?</b> \U0001F642',
-            912: f'<b>Szia <u>{user_first_name}</u>, '
-                 f'hogyan segíthetek?</b> \U0001F642',
-            913: f'<b>Olá <u>{user_first_name}</u>, '
-                 f'como posso ajudar?</b> \U0001F642',
-            914: f'<b>Hej <u>{user_first_name}</u>, '
-                 f'hur kan jag hjälpa dig?</b> \U0001F642',
-            915: f'<b>Saluton <u>{user_first_name}</u>, '
-                 f'kiel mi povas helpi vin?</b> \U0001F642',
-            916: f'<b>Rytsas, <u>{user_first_name}</u>, '
-                 f'skorkydoso kostagon nyke dohaeragon ao?</b> \U0001F642',
-            917: f'<b>Sveiki <u>{user_first_name}</u>, '
-                 f'kaip galiu jums padėti?</b> \U0001F642',
-            918: f'<b>Բարև <u>{user_first_name}</u>, '
-                 f'ինչպես կարող եմ օգնել ձեզ?</b> \U0001F642',
-            919: f'<b>Sawubona <u>{user_first_name}</u>, '
-                 f'ngicela ngingakusiza njani?</b> \U0001F642',
-            920: f'<b>Γειά σας <u>{user_first_name}</u>, '
-                 f'πώς μπορώ να σε βοηθήσω?</b> \U0001F642',
-            'default': f'<b><u>{user_first_name}</u>, '
-                       f'чем я могу вам помочь?</b> \U0001F642'
-        }
-
-        message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
         sent_message = BOT.send_message(
             chat_id,
-            message_text,
+            get_lang_greet_text(user_first_name),
             parse_mode='html',
             reply_markup=markup
         )
@@ -1496,63 +1449,48 @@ def candles_info(message, offsite=False):
 @BOT.message_handler(content_types=['text'])
 @check_bd_chat_id
 def message_input_text(message):
-    with connect('UsersDB.sql') as users_db:
-        cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id, message.message_id))
-        users_db.commit()
+    record_message_id_to_db(user_db_id, message.message_id)
 
-        if message.text.lower() == 'акуна':
-            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                           ' VALUES (?, ?)',
-                           (message.chat.id,
-                            BOT.send_message(message.chat.id,
-                                             text='Матата!').message_id))
-            users_db.commit()
-        elif message.text.lower() == 'матата':
-            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                           ' VALUES (?, ?)',
-                           (message.chat.id,
-                            BOT.send_message(message.chat.id,
-                                             text='Акуна!').message_id))
-            users_db.commit()
-        elif 'матата акуна' in message.text.lower():
-            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                           ' VALUES (?, ?)',
-                           (message.chat.id,
-                            BOT.send_message(message.chat.id,
-                                             text='\U0001F417 \U0001F439'
-                                             ).message_id))
-            users_db.commit()
-        elif 'акуна матата' in message.text.lower():
-            with open('easter_eggs/Akuna.jpg', 'rb') as img_akuna:
-                cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                               ' VALUES (?, ?)',
-                               (message.chat.id,
-                                BOT.send_photo(message.chat.id, img_akuna,
-                                               caption=f'<b>Акуна Матата!</b>',
-                                               parse_mode='html').message_id))
-                users_db.commit()
-        elif message.text == '\U0001F346':
-            with open('easter_eggs/bolt.png', 'rb') as img_bolt:
-                cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                               ' VALUES (?, ?)',
-                               (message.chat.id,
-                                BOT.send_photo(message.chat.id,
-                                               img_bolt).message_id))
-                users_db.commit()
-        elif 'hello world' in message.text.lower():
-            with open('easter_eggs/Hello-World.jpeg', 'rb') as HW_img:
-                cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                               ' VALUES (?, ?)',
-                               (message.chat.id,
-                                BOT.send_photo(message.chat.id,
-                                               HW_img).message_id))
-                users_db.commit()
-        else:
-            chepuha(message)
+    if message.text.lower() == 'акуна':
+        sent_message = BOT.send_message(
+            message.chat.id,
+            text='Матата!'
+        )
+    elif message.text.lower() == 'матата':
+        sent_message = BOT.send_message(
+            message.chat.id,
+            text='Акуна!'
+        )
+    elif 'матата акуна' in message.text.lower():
+        sent_message = BOT.send_message(
+            message.chat.id,
+            text='\U0001F417 \U0001F439'
+        )
+    elif 'акуна матата' in message.text.lower():
+        with open('easter_eggs/Akuna.jpg', 'rb') as img_akuna:
+            sent_message = BOT.send_photo(
+                message.chat.id,
+                img_akuna,
+                caption=f'<b>Акуна Матата!</b>',
+                parse_mode='html'
+            )
+    elif message.text == '\U0001F346':
+        with open('easter_eggs/bolt.png', 'rb') as img_bolt:
+            sent_message = BOT.send_photo(
+                message.chat.id,
+                img_bolt
+            )
+    elif 'hello world' in message.text.lower():
+        with open('easter_eggs/Hello-World.jpeg', 'rb') as HW_img:
+            sent_message = BOT.send_photo(
+                message.chat.id,
+                HW_img
+            )
+    else:
+        chepuha(message)
 
 
 def chepuha(message, new_user: bool = False):
