@@ -46,7 +46,11 @@ class User(Base):
         default=None
     )
 
-    messages = relationship('Message', back_populates='user')
+    messages = relationship(
+        'Message',
+        back_populates='user',
+        cascade='all, delete-orphan'
+    )
 
 
 class Message(Base):

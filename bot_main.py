@@ -30,8 +30,6 @@ BROADCAST_FUNC_MESSAGES_IDS = []
 ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
-
-
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
 
 
@@ -100,9 +98,9 @@ def check_is_admin(func):
 
 @BOT.message_handler(commands=['start', 'help'])
 def start_help(message, keep_last_msg: bool = False):
-    user_first_name = message.chat.first_name  # TG_user_first_name
-    chat_id = message.chat.id  # TG_chat_ID
-    username = message.chat.username  # TG_user_username
+    user_first_name = message.chat.first_name
+    chat_id = message.chat.id
+    username = message.chat.username
 
     markup = types.InlineKeyboardMarkup()
     btn_soc_profiles = types.InlineKeyboardButton(text='#МыВСети \U0001F4F1',
@@ -149,6 +147,8 @@ def start_help(message, keep_last_msg: bool = False):
             )
             session.add(user_record)
             session.commit()
+
+        user_db_id = user_record.id
 
     record_message_id_to_db(user_record.id, message.message_id)
 
@@ -226,7 +226,7 @@ def start_help(message, keep_last_msg: bool = False):
             reply_markup=markup
         )
 
-        record_message_id_to_db(user_record.id, sent_message.message_id)
+        record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['clean'])
@@ -295,7 +295,7 @@ def delete_message(message):
     BOT.delete_message(sent_message.chat.id, sent_message.message_id)
 
 
-def admin(message):  # Админское меню
+def admin(message):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -431,6 +431,7 @@ def send_user_count(message):
 def start_broadcast(message):
     global BROADCAST_ADMIN_ID
     chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_cancel_broadcast = types.InlineKeyboardButton('Отменить',
@@ -457,37 +458,35 @@ def start_broadcast(message):
             'Сейчас идёт рассылка другого администратора'
         )
 
-        record_message_id_to_db(chat_id, sent_message.message_id)
+        record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def confirm_broadcast(message):
     global BROADCAST_MESSAGE
+    BROADCAST_MESSAGE = message
+    BROADCAST_FUNC_MESSAGES_IDS.append(BROADCAST_MESSAGE.id)
 
-    if BROADCAST_ADMIN_ID is not None:
-        BROADCAST_MESSAGE = message
-        BROADCAST_FUNC_MESSAGES_IDS.append(BROADCAST_MESSAGE.id)
+    markup = types.InlineKeyboardMarkup()
 
-        markup = types.InlineKeyboardMarkup()
+    btn_send_broadcast = types.InlineKeyboardButton(
+        'Разослать',
+        callback_data='send_broadcast'
+    )
 
-        btn_send_broadcast = types.InlineKeyboardButton(
-            'Разослать',
-            callback_data='send_broadcast'
-        )
+    btn_cancel_broadcast = types.InlineKeyboardButton(
+        'Отменить',
+        callback_data='cancel'
+    )
 
-        btn_cancel_broadcast = types.InlineKeyboardButton(
-            'Отменить',
-            callback_data='cancel'
-        )
+    markup.add(btn_send_broadcast, btn_cancel_broadcast)
 
-        markup.add(btn_send_broadcast, btn_cancel_broadcast)
+    sent_message = BOT.send_message(
+        message.chat.id,
+        'Разослать сообщение?',
+        reply_markup=markup
+    )
 
-        sent_message = BOT.send_message(
-            message.chat.id,
-            'Разослать сообщение?',
-            reply_markup=markup
-        )
-
-        BROADCAST_FUNC_MESSAGES_IDS.append(sent_message.message_id)
+    BROADCAST_FUNC_MESSAGES_IDS.append(sent_message.message_id)
 
 
 @BOT.callback_query_handler(func=lambda call: call.data == 'send_broadcast')
@@ -549,12 +548,13 @@ def send_broadcast(call):
                          f'\n\n\U0000231A {start_time.split()[1]}'
                          )
 
-    BOT.send_message(call.message.chat.id,
-                     f'{broadcast_success}'
-                     f'\n'
-                     f'\n\U00002B07 <b>Содержание</b> \U00002B07',
-                     parse_mode='html'
-                     )
+    BOT.send_message(
+        call.message.chat.id,
+        f'{broadcast_success}'
+        f'\n'
+        f'\n\U00002B07 <b>Содержание</b> \U00002B07',
+        parse_mode='html'
+    )
 
     sleep(DEL_TIME)
     broadcast_function(call.message.chat.id, content_value, **content_args)
@@ -586,62 +586,55 @@ def cancel_broadcast(call):
     BOT.delete_message(call.message.chat.id, sent_message.id)
 
 
-def tarot_start(message):  # Проверка условий для Таро
+def tarot_start(message):
     chat_id = message.chat.id
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    user_first_name = message.chat.first_name
 
-    cursor.execute(
-        "SELECT last_tarrot_date FROM polzovately WHERE chat_id = ?",
-        (chat_id,)
-    )
+    with Session(engine) as session:
+        stmt = select(User).where(User.chat_id == chat_id)
+        user = session.execute(stmt).scalar()
+    last_tarot_date = user.last_tarot_date
 
     today = datetime.today().date().strftime('%d-%m-%Y')
-    last_tarot_date = cursor.fetchone()[0]
 
     if chat_id in ADMIN_IDS:
         BOT.delete_message(message.chat.id, message.id)
         sleep(DEL_TIME)
         tarot_main(message)
         start_help(message, True)
-
     else:
         if last_tarot_date == today:
-            cursor.execute(
-                "SELECT username FROM polzovately WHERE chat_id = ?",
-                (chat_id,))
-            user_name = cursor.fetchone()[0]
-            cursor.execute(
-                'INSERT INTO message_ids (chat_id, message_id)'
-                ' VALUES (?, ?)',
-                (message.chat.id,
-                 BOT.send_message(
-                     message.chat.id,
-                     f'<u>{user_name}</u>, '
-                     f'вы уже сегодня получили расклад, попробуйте завтра!',
-                     parse_mode='html').message_id)
+            sent_message = BOT.send_message(
+                message.chat.id,
+                f'<u>{user_first_name}</u>, '
+                f'вы уже сегодня получили расклад, попробуйте завтра!',
+                parse_mode='html'
             )
 
-            users_db.commit()
-
+            record_message_id_to_db(user.id, sent_message.message_id)
         else:
-            cursor.execute(
-                "UPDATE polzovately SET last_tarrot_date = ? "
-                "WHERE chat_id = ?",
-                (today, chat_id)
-            )
+            with Session(engine) as session:
+                session.execute(
+                    update(User).where(
+                        User.chat_id == chat_id
+                    ).values(
+                        last_tarot_date=today
+                    )
+                )
+                session.commit()
 
-            users_db.commit()
             BOT.delete_message(message.chat.id, message.id)
             sleep(DEL_TIME)
-            tarot_main(message)
-            start_help(message, True)
 
-    users_db.close()
+            tarot_main(message)
+
+            start_help(message, True)
 
 
 def tarot_main(message):
-    tarot_delay = 1.5  # Задержка между картами Таро
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
+    tarot_delay = 1.5
 
     if platform == 'win32':
         tarot_path = 'Tarot'
@@ -650,14 +643,7 @@ def tarot_main(message):
         tarot_path = path.join(getcwd(), 'Tarot')
         char = '/'
 
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
-
-    cursor.execute(
-        'INSERT INTO message_ids (chat_id, message_id)'
-        ' VALUES (?, ?)',
-        (message.chat.id,
-         BOT.send_message(
+    sent_message = BOT.send_message(
              message.chat.id,
              '<b>Расклад Таро - это всего лишь инструмент для '
              'ознакомления и развлечения. '
@@ -667,10 +653,11 @@ def tarot_main(message):
              f'\n<u>{ORG_NAME}</u> и его сотрудники не несут '
              'ответственности за любые действия и их последствия, '
              'которые повлекло использование данного расклада карт Таро.',
-             parse_mode='html').message_id))
-
-    users_db.commit()
+             parse_mode='html'
+    )
     sleep(tarot_delay)
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
     cards = glob(f'{tarot_path}/*.jpg')
     user_random_cards = []
@@ -699,23 +686,21 @@ def tarot_main(message):
         with open(card, 'rb') as photo:
             with open(f'{card[:-4]}.txt', encoding='utf-8') as text:
                 description = text.read()
-            cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                           ' VALUES (?, ?)',
-                           (message.chat.id,
-                            BOT.send_photo(
+
+            tarot_message = BOT.send_photo(
                                 message.chat.id, photo,
                                 caption=f'<b>{caption}</b>: {description}',
-                                parse_mode='html').message_id))
+                                parse_mode='html'
+            )
 
-            users_db.commit()
+            record_message_id_to_db(user_db_id, tarot_message.message_id)
+
             sleep(tarot_delay)
-
-    users_db.close()
 
 
 @BOT.message_handler(commands=['studio'])
 @check_bd_chat_id
-def studio(message):  # Вкладка студии
+def studio(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -825,7 +810,7 @@ def directions(message, offsite=False):
 
 @BOT.message_handler(commands=['mk'])
 @check_bd_chat_id
-def offsite_workshops(message):  # Вкладка выездных МК
+def offsite_workshops(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -883,7 +868,7 @@ def offsite_workshops(message):  # Вкладка выездных МК
 
 @BOT.message_handler(commands=['shop'])
 @check_bd_chat_id
-def shop(message):  # Вкладка магазина
+def shop(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -958,7 +943,7 @@ def catalog(call):
     users_db.close()
 
 
-def shipment(message):  # Вкладка "Доставка"
+def shipment(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -1008,7 +993,7 @@ def shipment(message):  # Вкладка "Доставка"
     users_db.close()
 
 
-def pay(message):  # Вкладка "Оплата"
+def pay(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -1056,7 +1041,7 @@ def pay(message):  # Вкладка "Оплата"
     users_db.close()
 
 
-def order(message):  # Вкладка "Как заказать"
+def order(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -1181,7 +1166,7 @@ def soc_profiles(message):
     users_db.close()
 
 
-def epoxy(message):  # Описание занятия по смоле в студии
+def epoxy(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -1303,7 +1288,7 @@ def gips_info(message, offsite=False):
     users_db.close()
 
 
-def sketching(message):  # Описание занятия по Скетчингу в студии
+def sketching(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
@@ -1421,7 +1406,7 @@ def tie_dye_info(message, offsite=False):
     users_db.close()
 
 
-def custom_cloth(message):  # Описание занятия по Кастому одежды в студии
+def custom_cloth(message):
     users_db = connect('UsersDB.sql')
     cursor = users_db.cursor()
 
