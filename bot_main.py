@@ -1,7 +1,7 @@
 from datetime import datetime
 from glob import glob
 from os import getenv, path, getcwd
-from random import choice, randint
+from random import choice
 from sys import platform
 from time import sleep
 
@@ -35,6 +35,8 @@ BROADCAST_FUNC_MESSAGES_IDS = []
 ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
+
+
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
 
 
@@ -153,7 +155,6 @@ def start_help(message, keep_last_msg: bool = False):
             BOT.delete_message(chat_id, message.id)
         else:
             pass
-
         sleep(DEL_TIME)
 
         sent_message = BOT.send_message(
@@ -1446,92 +1447,110 @@ def candles_info(message, offsite=False):
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-@BOT.message_handler(content_types=['text'])
+@BOT.message_handler(content_types=['text', 'photo'])
 @check_bd_chat_id
-def message_input_text(message):
+def message_input(message):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
+    flag = False
 
     record_message_id_to_db(user_db_id, message.message_id)
 
     if message.text.lower() == 'акуна':
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             text='Матата!'
         )
+        flag = True
     elif message.text.lower() == 'матата':
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             text='Акуна!'
         )
+        flag = True
     elif 'матата акуна' in message.text.lower():
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             text='\U0001F417 \U0001F439'
         )
+        flag = True
     elif 'акуна матата' in message.text.lower():
         with open('easter_eggs/Akuna.jpg', 'rb') as img_akuna:
             sent_message = BOT.send_photo(
-                message.chat.id,
+                chat_id,
                 img_akuna,
                 caption=f'<b>Акуна Матата!</b>',
                 parse_mode='html'
             )
+        flag = True
     elif message.text == '\U0001F346':
         with open('easter_eggs/bolt.png', 'rb') as img_bolt:
             sent_message = BOT.send_photo(
-                message.chat.id,
+                chat_id,
                 img_bolt
             )
+        flag = True
     elif 'hello world' in message.text.lower():
         with open('easter_eggs/Hello-World.jpeg', 'rb') as HW_img:
             sent_message = BOT.send_photo(
-                message.chat.id,
+                chat_id,
                 HW_img
             )
+        flag = True
+
+    if flag:
+        record_message_id_to_db(user_db_id, sent_message.message_id)
     else:
         chepuha(message)
 
 
 def chepuha(message, new_user: bool = False):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
-    user_name = message.chat.first_name
+    chat_id = message.chat.id
+    user_first_name = message.chat.first_name
+    username = message.chat.username
+
+    def chepuha_message(command: str):
+        text = (
+            f'Извините <u>{user_first_name}</u>, '
+            f'я вас не понимаю. '
+            f'\n'
+            f'\nПопробуйте написать '
+            f'{command} для возврата в '
+            f'главное меню или воспользуйтесь '
+            f'кнопкой "Меню" '
+            f'около окна ввода сообщения'
+        )
+
+        return text
 
     if not new_user:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_message(
-                            message.chat.id,
-                            text=f'Извините <u>{user_name}</u>, '
-                                 f'я вас не понимаю. '
-                                 f'\n'
-                                 f'\nПопробуйте написать '
-                                 f'/help для возврата в '
-                                 f'главное меню или воспользуйтесь '
-                                 f'кнопкой "Меню" '
-                                 f'около окна ввода сообщения',
-                            parse_mode='html').message_id))
-    else:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        message.message_id))
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_message(
-                            message.chat.id,
-                            text=f'Извините <u>{user_name}</u>, похоже '
-                                 f'вы у нас впервые!'
-                                 f'\n'
-                                 f'\nПожалуйста, напишите /start для вызова '
-                                 f'главного меню',
-                            parse_mode='html').message_id))
+        user_db_id = get_user_db_id(chat_id)
 
-    users_db.commit()
-    users_db.close()
+        sent_message = BOT.send_message(
+            message.chat.id,
+            text=chepuha_message('/help'),
+            parse_mode='html'
+        )
+
+        record_message_id_to_db(user_db_id, sent_message.message_id)
+    else:
+        sent_message = BOT.send_message(
+            message.chat.id,
+            text=chepuha_message('start'),
+            parse_mode='html'
+        )
+
+        with Session(engine) as session:
+            user_record = User(
+                chat_id=chat_id,
+                username=username,
+                user_first_name=user_first_name
+            )
+            session.add(user_record)
+            session.commit()
+
+            record_message_id_to_db(user_record.id, message.message_id)
+            record_message_id_to_db(user_record.id, sent_message.message_id)
 
 
 @BOT.callback_query_handler(func=lambda callback: True)
