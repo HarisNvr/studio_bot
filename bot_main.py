@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from glob import glob
 from os import getenv, path, getcwd
 from random import choice, randint
@@ -12,10 +12,14 @@ from sqlalchemy.orm import Session
 from telebot import TeleBot, types
 from telebot.apihelper import ApiTelegramException
 
-from sql_orm import engine, record_message_id_to_db, Message, User, \
-    get_user_db_id, get_users_count
+from sql_orm import (
+    engine, record_message_id_to_db, Message, User, get_user_db_id,
+    get_users_count, morning_routine
+)
 
 load_dotenv()
+
+morning_routine()
 
 BOT = TeleBot(getenv('BOT'))
 ORG_NAME = getenv('ORG_NAME')
@@ -31,26 +35,6 @@ ADMIN_IDS = []
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
 # .env exports data only as <str>, chat_id in pyTelegramBotAPI preferably <int>
-
-
-def morning_routine():
-    """
-    Delete old message IDs from the DB. Telegram's policy doesn't allow bots
-    to delete messages that are older than 48 hours.
-    :return: Nothing
-    """
-
-    threshold = datetime.now() - timedelta(hours=51)
-
-    with Session(engine) as session:
-        stmt = delete(Message).where(
-            Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S'))
-
-        session.execute(stmt)
-        session.commit()
-
-
-morning_routine()
 
 
 def check_bd_chat_id(func):
@@ -154,7 +138,7 @@ def start_help(message, keep_last_msg: bool = False):
 
     if message.text == '/start':
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             f'<b>Здравствуйте, <u>{user_first_name}</u>! \U0001F642'
             f'\nМеня зовут {BOT.get_me().username}.</b>'
             f'\nЧем я могу вам помочь?',
@@ -165,7 +149,7 @@ def start_help(message, keep_last_msg: bool = False):
         record_message_id_to_db(user_record.id, sent_message.message_id)
     else:
         if not keep_last_msg:
-            BOT.delete_message(message.chat.id, message.id)
+            BOT.delete_message(chat_id, message.id)
         else:
             pass
 
@@ -220,7 +204,7 @@ def start_help(message, keep_last_msg: bool = False):
 
         message_text = lang_greet_dict.get(lang, lang_greet_dict['default'])
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             message_text,
             parse_mode='html',
             reply_markup=markup
@@ -245,7 +229,7 @@ def clean(message):
     sleep(DEL_TIME)
 
     sent_message = BOT.send_message(
-        message.chat.id,
+        chat_id,
         f'Вы хотите полностью очистить этот чат?'
         f'\n\n*Сообщения, отправленные более 48ч. назад и рассылка '
         f'удалены не будут',
@@ -303,11 +287,11 @@ def admin(message):
     btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     sent_message = BOT.send_message(
-        message.chat.id,
+        chat_id,
         '<b>Добро пожаловать в админское меню!</b>'
         '\n'
         '\n/broadcast - Начать процедуру рассылки'
@@ -329,11 +313,11 @@ def proportions(message, keep_last_msg: bool = False):
     user_db_id = get_user_db_id(chat_id)
 
     if not keep_last_msg:
-        BOT.delete_message(message.chat.id, message.id)
+        BOT.delete_message(chat_id, message.id)
         sleep(DEL_TIME)
 
     sent_message = BOT.send_message(
-        message.chat.id,
+        chat_id,
         f'Введите через пробел: '
         f'\nПропорции компонентов '
         f'<b>A</b> и <b>B</b>, '
@@ -347,15 +331,15 @@ def proportions(message, keep_last_msg: bool = False):
 
 
 def calculate_proportions(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
+    user_db_id = get_user_db_id(message.chat.id)
 
     record_message_id_to_db(user_db_id, message.message_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_another_one = types.InlineKeyboardButton(
         'Другая пропорция',
-        callback_data='another_proportion')
+        callback_data='another_proportion'
+    )
     markup.add(btn_another_one)
 
     def is_number(item):
@@ -398,8 +382,8 @@ def calculate_proportions(message):
             parse_mode='html'
         )
     else:
-        sent_message = BOT.send_message(
-            message.chat.id,
+        sent_message = BOT.reply_to(
+            message,
             f'Неверный формат данных.'
             f'\nПожалуйста, '
             f'введите числа по образцу:\n<b>A B C</b>',
@@ -444,7 +428,7 @@ def start_broadcast(message):
         sleep(DEL_TIME)
 
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             'Отправьте сообщение для рассылки',
             reply_markup=markup
         )
@@ -454,7 +438,7 @@ def start_broadcast(message):
         BOT.register_next_step_handler(message, confirm_broadcast)
     else:
         sent_message = BOT.send_message(
-            message.chat.id,
+            chat_id,
             'Сейчас идёт рассылка другого администратора'
         )
 
@@ -494,6 +478,7 @@ def send_broadcast(call):
     global BROADCAST_MESSAGE
     global BROADCAST_ADMIN_ID
     global BROADCAST_FUNC_MESSAGES_IDS
+    chat_id = call.message.chat.id
 
     BOT.answer_callback_query(call.id)
 
@@ -504,13 +489,15 @@ def send_broadcast(call):
 
     while BROADCAST_FUNC_MESSAGES_IDS:
         func_message_id = BROADCAST_FUNC_MESSAGES_IDS.pop(0)
-        BOT.delete_message(call.message.chat.id, func_message_id)
+        BOT.delete_message(chat_id, func_message_id)
         sleep(0.2)
 
     sleep(DEL_TIME)
-    sent_message = BOT.send_message(call.message.chat.id,
-                                    text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>',
-                                    parse_mode='html')
+    sent_message = BOT.send_message(
+        chat_id,
+        text='<b>РАССЫЛКА В ПРОЦЕССЕ</b>',
+        parse_mode='html'
+    )
     start_time = datetime.now().strftime('%d-%m-%Y %H:%M').split('.')[0]
 
     if broadcast_type == 'photo':
@@ -532,7 +519,7 @@ def send_broadcast(call):
             except ApiTelegramException:
                 pass
 
-    BOT.delete_message(call.message.chat.id, sent_message.id)
+    BOT.delete_message(chat_id, sent_message.id)
     sleep(DEL_TIME)
 
     if (str(send_count)[-1] in ['2', '3', '4']
@@ -549,7 +536,7 @@ def send_broadcast(call):
                          )
 
     BOT.send_message(
-        call.message.chat.id,
+        chat_id,
         f'{broadcast_success}'
         f'\n'
         f'\n\U00002B07 <b>Содержание</b> \U00002B07',
@@ -557,7 +544,7 @@ def send_broadcast(call):
     )
 
     sleep(DEL_TIME)
-    broadcast_function(call.message.chat.id, content_value, **content_args)
+    broadcast_function(chat_id, content_value, **content_args)
 
     BROADCAST_ADMIN_ID = None
     BROADCAST_MESSAGE = None
@@ -568,6 +555,7 @@ def cancel_broadcast(call):
     global BROADCAST_MESSAGE
     global BROADCAST_ADMIN_ID
     global BROADCAST_FUNC_MESSAGES_IDS
+    chat_id = call.message.chat.id
 
     BOT.answer_callback_query(call.id)
 
@@ -580,10 +568,12 @@ def cancel_broadcast(call):
     BROADCAST_MESSAGE = None
 
     sleep(DEL_TIME)
-    sent_message = BOT.send_message(call.message.chat.id,
-                                    text='Рассылка отменена')
+    sent_message = BOT.send_message(
+        chat_id,
+        text='Рассылка отменена'
+    )
     sleep(5)
-    BOT.delete_message(call.message.chat.id, sent_message.id)
+    BOT.delete_message(chat_id, sent_message.id)
 
 
 def tarot_start(message):
@@ -598,7 +588,7 @@ def tarot_start(message):
     today = datetime.today().date().strftime('%d-%m-%Y')
 
     if chat_id in ADMIN_IDS:
-        BOT.delete_message(message.chat.id, message.id)
+        BOT.delete_message(chat_id, message.id)
         sleep(DEL_TIME)
         tarot_main(message)
         start_help(message, True)
@@ -623,7 +613,7 @@ def tarot_start(message):
                 )
                 session.commit()
 
-            BOT.delete_message(message.chat.id, message.id)
+            BOT.delete_message(chat_id, message.id)
             sleep(DEL_TIME)
 
             tarot_main(message)
@@ -644,16 +634,16 @@ def tarot_main(message):
         char = '/'
 
     sent_message = BOT.send_message(
-             message.chat.id,
-             '<b>Расклад Таро - это всего лишь инструмент для '
-             'ознакомления и развлечения. '
-             'Расклад карт Таро не является истиной и не должен '
-             'использоваться для принятия важных решений.</b>'
-             '\n'
-             f'\n<u>{ORG_NAME}</u> и его сотрудники не несут '
-             'ответственности за любые действия и их последствия, '
-             'которые повлекло использование данного расклада карт Таро.',
-             parse_mode='html'
+        message.chat.id,
+        '<b>Расклад Таро - это всего лишь инструмент для '
+        'ознакомления и развлечения. '
+        'Расклад карт Таро не является истиной и не должен '
+        'использоваться для принятия важных решений.</b>'
+        '\n'
+        f'\n<u>{ORG_NAME}</u> и его сотрудники не несут '
+        'ответственности за любые действия и их последствия, '
+        'которые повлекло использование данного расклада карт Таро.',
+        parse_mode='html'
     )
     sleep(tarot_delay)
 
@@ -688,9 +678,9 @@ def tarot_main(message):
                 description = text.read()
 
             tarot_message = BOT.send_photo(
-                                message.chat.id, photo,
-                                caption=f'<b>{caption}</b>: {description}',
-                                parse_mode='html'
+                message.chat.id, photo,
+                caption=f'<b>{caption}</b>: {description}',
+                parse_mode='html'
             )
 
             record_message_id_to_db(user_db_id, tarot_message.message_id)
@@ -701,8 +691,8 @@ def tarot_main(message):
 @BOT.message_handler(commands=['studio'])
 @check_bd_chat_id
 def studio(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_dirs = types.InlineKeyboardButton('Подробнее о направлениях',
@@ -712,42 +702,43 @@ def studio(message):
                                           url='https://go.2gis.com/8od46')
     btn_tg_dm = types.InlineKeyboardButton(
         text='\U000026A1 Записаться на МК \U000026A1',
-        url='https://t.me/elenitsa17')
+        url='https://t.me/elenitsa17'
+    )
     markup.row(btn_dirs)
     markup.row(btn_tg_dm)
     markup.row(btn_2gis)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
+
     with open('studio_and_directions/studio_img.PNG', 'rb') as img_studio:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_studio,
-                            caption=f'<b>Наша мастерская</b> – это то место, '
-                                    f'где вы сможете раскрыть '
-                                    f'свой потенциал и '
-                                    f'реализовать идеи в разных направлениях: '
-                                    f'свечеварение, эпоскидная смола, '
-                                    f'рисование, '
-                                    f'роспись одежды и многое другое. '
-                                    '\n'
-                                    '\n\U0001F4CD<u>Наши адреса:'
-                                    '\n</u><b>\U00002693 г. Новороссийск, '
-                                    'с. Цемдолина, ул. Цемесская, д. 10'
-                                    '\n\U00002600 г. Анапа, с. Витязево, '
-                                    'ул. Курганная, д. 29</b>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
-    users_db.commit()
-    users_db.close()
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_studio,
+            caption=f'<b>Наша мастерская</b> – это то место, '
+                    f'где вы сможете раскрыть '
+                    f'свой потенциал и '
+                    f'реализовать идеи в разных направлениях: '
+                    f'свечеварение, эпоскидная смола, '
+                    f'рисование, '
+                    f'роспись одежды и многое другое. '
+                    '\n'
+                    '\n\U0001F4CD<u>Наши адреса:'
+                    '\n</u><b>\U00002693 г. Новороссийск, '
+                    'с. Цемдолина, ул. Цемесская, д. 10'
+                    '\n\U00002600 г. Анапа, с. Витязево, '
+                    'ул. Курганная, д. 29</b>',
+            parse_mode='html',
+            reply_markup=markup
+        )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def directions(message, offsite=False):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
 
@@ -790,29 +781,25 @@ def directions(message, offsite=False):
         markup.row(btn_candles)
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                   ' VALUES (?, ?)',
-                   (message.chat.id,
-                    BOT.send_message(
-                        message.chat.id,
-                        f'<b>Выберите <u>направление,</u> о котором хотите '
-                        f'узнать подробнее:</b>',
-                        parse_mode='html',
-                        reply_markup=markup).message_id)
-                   )
+    sent_message = BOT.send_message(
+        chat_id,
+        f'<b>Выберите <u>направление,</u> о котором хотите '
+        f'узнать подробнее:</b>',
+        parse_mode='html',
+        reply_markup=markup
+    )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['mk'])
 @check_bd_chat_id
 def offsite_workshops(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_back = types.InlineKeyboardButton(text='Назад', callback_data='help')
@@ -830,47 +817,44 @@ def offsite_workshops(message):
     markup.row(btn_directions_offsite)
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/offsite_workshops_img.PNG',
               'rb') as img_studio:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_studio,
-                            caption='<b>Вы хотите удивить гостей '
-                                    'творческим мастер–классом?</b> '
-                                    '\n'
-                                    '\n Наша студия готова приехать к вам c '
-                                    'оборудованием и материалами '
-                                    'по любой теме '
-                                    'из нашего каталога: свечеварение, '
-                                    'рисование, '
-                                    'роспись одежды и другие. '
-                                    'Мы обеспечим все '
-                                    'необходимое для проведения МК в любом '
-                                    'месте – в помещении или '
-                                    'на свежем воздухе. '
-                                    '\n'
-                                    '\n <u>Все гости получат новые '
-                                    'знания, навыки '
-                                    'и подарки, сделанные своими руками!</u>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id)
-                       )
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_studio,
+            caption='<b>Вы хотите удивить гостей '
+                    'творческим мастер–классом?</b> '
+                    '\n'
+                    '\n Наша студия готова приехать к вам c '
+                    'оборудованием и материалами '
+                    'по любой теме '
+                    'из нашего каталога: свечеварение, '
+                    'рисование, '
+                    'роспись одежды и другие. '
+                    'Мы обеспечим все '
+                    'необходимое для проведения МК в любом '
+                    'месте – в помещении или '
+                    'на свежем воздухе. '
+                    '\n'
+                    '\n <u>Все гости получат новые '
+                    'знания, навыки '
+                    'и подарки, сделанные своими руками!</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['shop'])
 @check_bd_chat_id
 def shop(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_catalog_main = types.InlineKeyboardButton('Каталог \U0001F50D',
@@ -889,113 +873,106 @@ def shop(message):
     markup.row(btn_pay, btn_shipment)
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/craft_shop.png', 'rb') as shop_img:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            shop_img,
-                            caption=f'<b>Добро пожаловать в наш '
-                                    f'крафтовый магазин \U00002728</b>'
-                                    f'\n'
-                                    f'\n Здесь вы найдете уникальные и '
-                                    f'качественные изделия ручной работы, '
-                                    f'созданные с любовью и нежностью. '
-                                    f'Мы предлагаем вам широкий ассортимент '
-                                    f'товаров: декор для дома, подарки, '
-                                    f'украшения, сухоцветы и многое другое.'
-                                    f'\n'
-                                    f'\n <b>Мы гарантируем вам:</b> '
-                                    f'<u>высокое качество, '
-                                    f'индивидуальный подход '
-                                    f'и быструю отправку.</u>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            shop_img,
+            caption=f'<b>Добро пожаловать в наш '
+                    f'крафтовый магазин \U00002728</b>'
+                    f'\n'
+                    f'\n Здесь вы найдете уникальные и '
+                    f'качественные изделия ручной работы, '
+                    f'созданные с любовью и нежностью. '
+                    f'Мы предлагаем вам широкий ассортимент '
+                    f'товаров: декор для дома, подарки, '
+                    f'украшения, сухоцветы и многое другое.'
+                    f'\n'
+                    f'\n <b>Мы гарантируем вам:</b> '
+                    f'<u>высокое качество, '
+                    f'индивидуальный подход '
+                    f'и быструю отправку.</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.callback_query_handler(func=lambda call: call.data == "catalog")
 def catalog(call):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = call.message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     BOT.answer_callback_query(call.id)
 
     with open('catalog/CSA_catalog.pdf', 'rb') as catalog_pdf:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (call.message.chat.id,
-                        BOT.send_document(
-                            call.message.chat.id,
-                            catalog_pdf,
-                            caption='Представляем наш каталог в формате PDF!'
-                                    '\n\n<b>Редакция от 13.07.2023</b>',
-                            parse_mode='html'
-                        ).message_id))
+        sent_message = BOT.send_document(
+            chat_id,
+            catalog_pdf,
+            caption='Представляем наш каталог в формате PDF!'
+                    '\n\n<b>Редакция от 13.07.2023</b>',
+            parse_mode='html'
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def shipment(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_tg_dm = types.InlineKeyboardButton(
         text='\U000026A1 Связаться с нами \U000026A1',
-        url='https://t.me/elenitsa17')
+        url='https://t.me/elenitsa17'
+    )
     btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/shipment.jpg', 'rb') as shipment_img:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            shipment_img,
-                            caption='<b>После изготовления вашего заказа, '
-                                    'на следующий рабочий день мы начинаем '
-                                    'процесс доставки, который '
-                                    'включает в себя следующее:</b>'
-                                    '\n'
-                                    '\n <u>ШАГ 1</u>: '
-                                    'Бережно и надёжно упакуем ваш заказ '
-                                    '\n'
-                                    '\n <u>ШАГ 2</u>: '
-                                    'Отвезем его в выбранную '
-                                    'вами транспортную '
-                                    'компанию (СДЕК, DPD, '
-                                    'Boxberry, почта России)'
-                                    '\n'
-                                    '\n <u>ШАГ 3</u>: В течение '
-                                    'нескольких дней '
-                                    'вы сможете получить ваш заказ'
-                                    '\n'
-                                    '\n Если у вас остались '
-                                    'какие-либо вопросы, '
-                                    'касательно процесса доставки - вы всегда '
-                                    'можете написать нам!',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            shipment_img,
+            caption='<b>После изготовления вашего заказа, '
+                    'на следующий рабочий день мы начинаем '
+                    'процесс доставки, который '
+                    'включает в себя следующее:</b>'
+                    '\n'
+                    '\n <u>ШАГ 1</u>: '
+                    'Бережно и надёжно упакуем ваш заказ '
+                    '\n'
+                    '\n <u>ШАГ 2</u>: '
+                    'Отвезем его в выбранную '
+                    'вами транспортную '
+                    'компанию (СДЕК, DPD, '
+                    'Boxberry, почта России)'
+                    '\n'
+                    '\n <u>ШАГ 3</u>: В течение '
+                    'нескольких дней '
+                    'вы сможете получить ваш заказ'
+                    '\n'
+                    '\n Если у вас остались '
+                    'какие-либо вопросы, '
+                    'касательно процесса доставки - вы всегда '
+                    'можете написать нам!',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def pay(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+def payment(message):
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
 
@@ -1007,43 +984,41 @@ def pay(message):
     btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/pay.png', 'rb') as pay_img:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            pay_img,
-                            caption='<u>После выбора товаров '
-                                    'и их характеристик, '
-                                    'а также согласования с '
-                                    'мастером - вам будет '
-                                    'предложено оплатить заказ.</u>'
-                                    '\n'
-                                    '\n<b>Обращаем ваше внимание, '
-                                    'что наша студия '
-                                    'работает только по 100% предоплате!</b>'
-                                    '\n'
-                                    '\n Мы принимаем банковские '
-                                    'переводы на карту '
-                                    'или по СБП, если вам необходим чек '
-                                    'для отчётности - мы вам его предоставим. '
-                                    'После получения оплаты мы начинаем '
-                                    'изготовление вашего заказа в рамках '
-                                    'согласованного заранее срока',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            pay_img,
+            caption='<u>После выбора товаров '
+                    'и их характеристик, '
+                    'а также согласования с '
+                    'мастером - вам будет '
+                    'предложено оплатить заказ.</u>'
+                    '\n'
+                    '\n<b>Обращаем ваше внимание, '
+                    'что наша студия '
+                    'работает только по 100% предоплате!</b>'
+                    '\n'
+                    '\n Мы принимаем банковские '
+                    'переводы на карту '
+                    'или по СБП, если вам необходим чек '
+                    'для отчётности - мы вам его предоставим. '
+                    'После получения оплаты мы начинаем '
+                    'изготовление вашего заказа в рамках '
+                    'согласованного заранее срока',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def order(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+def ordering(message):
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
 
@@ -1055,51 +1030,49 @@ def order(message):
     btn_back = types.InlineKeyboardButton('Назад', callback_data='shop')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/order.jpg', 'rb') as img_order:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_order,
-                            caption='<b>Заказать красивое '
-                                    'изделие ручной работы '
-                                    'очень просто! Вам потребуется:</b>'
-                                    '\n'
-                                    '\n1) Выбрать из каталога товар, '
-                                    'который вам понравился.'
-                                    '\n'
-                                    '\n2) Запомнить порядковый '
-                                    'номер этого товара.'
-                                    '\n'
-                                    '\n3) Написать нам номер/номера '
-                                    'товаров, которые вы хотели бы заказать. '
-                                    'Наш мастер подскажет, '
-                                    'какие цвета/ароматы '
-                                    'доступны для данного '
-                                    'типа товара, а также '
-                                    'ответит на интересующие вопросы.'
-                                    '\n'
-                                    '\n<u>Фотографии из каталога являются '
-                                    'исключительно ознакомительными. '
-                                    'Мы не гарантируем 100% повторения '
-                                    'изделия с фото, т.к. каждое изделие '
-                                    'изготавливается вручную "с нуля".</u>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_order,
+            caption='<b>Заказать красивое '
+                    'изделие ручной работы '
+                    'очень просто! Вам потребуется:</b>'
+                    '\n'
+                    '\n1) Выбрать из каталога товар, '
+                    'который вам понравился.'
+                    '\n'
+                    '\n2) Запомнить порядковый '
+                    'номер этого товара.'
+                    '\n'
+                    '\n3) Написать нам номер/номера '
+                    'товаров, которые вы хотели бы заказать. '
+                    'Наш мастер подскажет, '
+                    'какие цвета/ароматы '
+                    'доступны для данного '
+                    'типа товара, а также '
+                    'ответит на интересующие вопросы.'
+                    '\n'
+                    '\n<u>Фотографии из каталога являются '
+                    'исключительно ознакомительными. '
+                    'Мы не гарантируем 100% повторения '
+                    'изделия с фото, т.к. каждое изделие '
+                    'изготавливается вручную "с нуля".</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(commands=['soc_profiles'])
 @check_bd_chat_id
 def soc_profiles(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
 
@@ -1150,25 +1123,22 @@ def soc_profiles(message):
     markup.row(btn_support)
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
-    cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                   ' VALUES (?, ?)',
-                   (message.chat.id,
-                    BOT.send_message(
-                        message.chat.id,
-                        f'<b>Какая <u>соц.сеть</u>, вас интересует:</b>',
-                        parse_mode='html',
-                        reply_markup=markup).message_id)
-                   )
 
-    users_db.commit()
-    users_db.close()
+    sent_message = BOT.send_message(
+        chat_id,
+        f'<b>Какая <u>соц.сеть</u>, вас интересует:</b>',
+        parse_mode='html',
+        reply_markup=markup
+    )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def epoxy(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_back = types.InlineKeyboardButton(text='Назад',
@@ -1182,69 +1152,70 @@ def epoxy(message):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/epoxy_img.png', 'rb') as img_epoxy:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_epoxy,
-                            caption=f'<b>Эпоксидная смола</b> - это '
-                                    f'универсальный '
-                                    f'материал, который позволяет '
-                                    f'создавать разнообразные изделия и '
-                                    f'декоративные элементы.'
-                                    f'\n'
-                                    f'\n На нашем занятии вы '
-                                    f'научитесь основам '
-                                    f'заливки. Мы покажем вам '
-                                    f'различные техники, '
-                                    f'а также расскажем о тонкостях '
-                                    f'при работе '
-                                    f'со смолой. Вы сможете создать свои '
-                                    f'уникальные и неповторимые '
-                                    f'изделия из смолы.'
-                                    f'\n'
-                                    f'\n Смола застывает в течении 24 часов. '
-                                    f'Своё изделие вы сможете забрать уже на '
-                                    f'следующий день. После отвердевания, '
-                                    f'смола становится безвредной и может '
-                                    f'контактировать с холодными продуктами.'
-                                    f'\n'
-                                    f'\n Мы обеспечим вам '
-                                    f'необходимую защитную '
-                                    f'экипировку: перчатки, респираторы и '
-                                    f'фартуки. Занятия проводятся в хорошо '
-                                    f'проветриваемом помещении.'
-                                    f'\n'
-                                    f'\n<u>Уточняйте актуальное расписание, '
-                                    f'перечень изделий и наличие '
-                                    f'мест у мастера!</u>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_epoxy,
+            caption=f'<b>Эпоксидная смола</b> - это '
+                    f'универсальный '
+                    f'материал, который позволяет '
+                    f'создавать разнообразные изделия и '
+                    f'декоративные элементы.'
+                    f'\n'
+                    f'\n На нашем занятии вы '
+                    f'научитесь основам '
+                    f'заливки. Мы покажем вам '
+                    f'различные техники, '
+                    f'а также расскажем о тонкостях '
+                    f'при работе '
+                    f'со смолой. Вы сможете создать свои '
+                    f'уникальные и неповторимые '
+                    f'изделия из смолы.'
+                    f'\n'
+                    f'\n Смола застывает в течении 24 часов. '
+                    f'Своё изделие вы сможете забрать уже на '
+                    f'следующий день. После отвердевания, '
+                    f'смола становится безвредной и может '
+                    f'контактировать с холодными продуктами.'
+                    f'\n'
+                    f'\n Мы обеспечим вам '
+                    f'необходимую защитную '
+                    f'экипировку: перчатки, респираторы и '
+                    f'фартуки. Занятия проводятся в хорошо '
+                    f'проветриваемом помещении.'
+                    f'\n'
+                    f'\n<u>Уточняйте актуальное расписание, '
+                    f'перечень изделий и наличие '
+                    f'мест у мастера!</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def gips_info(message, offsite=False):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     if offsite:
         btn_text = '\U000026A1 Забронировать МК \U000026A1'
-        additional_info = ('<u>Минимальное количество человек, перечень '
-                           'изделий и стоимость выезда на локацию проведения '
-                           'уточняйте у мастера!</u>')
+        additional_info = (
+            '<u>Минимальное количество человек, перечень '
+            'изделий и стоимость выезда на локацию проведения '
+            'уточняйте у мастера!</u>'
+        )
         callback_data = 'directions_offsite'
     else:
         btn_text = '\U000026A1 Записаться на МК \U000026A1'
-        additional_info = ('<u>Уточняйте актуальное расписание, '
-                           f'перечень изделий и наличие '
-                           f'мест у мастера!</u>')
+        additional_info = (
+            '<u>Уточняйте актуальное расписание, '
+            f'перечень изделий и наличие '
+            f'мест у мастера!</u>'
+        )
         callback_data = 'directions'
 
     markup = types.InlineKeyboardMarkup()
@@ -1255,42 +1226,42 @@ def gips_info(message, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/gips_img.png', 'rb') as img_gips:
-        caption = (f'<b>Гипс</b> - это универсальный '
-                   f'и простой в работе материал, '
-                   f'из которого можно создавать различные предметы декора и '
-                   f'подарки.'
-                   f'\n\n На нашем занятии вы познакомитесь с основами '
-                   f'литья из гипса и узнаете, как изготавливать гипсовые '
-                   f'изделия своими руками. '
-                   f'Мы научим вас правильно замешивать '
-                   f'гипсовый раствор, расскажем '
-                   f'о секретах получения крепкого, '
-                   f'ровного изделия с минимальным количеством пузырей.'
-                   f'\n\n Вы сможете создать свои неповторимые '
-                   f'изделия и украсить дом. Так же гипсовые изделия – это '
-                   f'отличный подарок, сделанный своими руками.'
-                   f'\n\n{additional_info}')
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_gips,
-                            caption=caption,
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        caption = (
+            f'<b>Гипс</b> - это универсальный '
+            f'и простой в работе материал, '
+            f'из которого можно создавать различные предметы декора и '
+            f'подарки.'
+            f'\n\n На нашем занятии вы познакомитесь с основами '
+            f'литья из гипса и узнаете, как изготавливать гипсовые '
+            f'изделия своими руками. '
+            f'Мы научим вас правильно замешивать '
+            f'гипсовый раствор, расскажем '
+            f'о секретах получения крепкого, '
+            f'ровного изделия с минимальным количеством пузырей.'
+            f'\n\n Вы сможете создать свои неповторимые '
+            f'изделия и украсить дом. Так же гипсовые изделия – это '
+            f'отличный подарок, сделанный своими руками.'
+            f'\n\n{additional_info}'
+        )
 
-    users_db.commit()
-    users_db.close()
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_gips,
+            caption=caption,
+            parse_mode='html',
+            reply_markup=markup
+        )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def sketching(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_back = types.InlineKeyboardButton(text='Назад',
@@ -1303,52 +1274,50 @@ def sketching(message):
 
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/sketching_img.png',
               'rb') as img_sketching:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_sketching,
-                            caption='<b>Скетчинг</b> - это техника быстрого '
-                                    'рисования набросков и эскизов, которая '
-                                    'помогает визуализировать идеи, эмоции и '
-                                    'впечатления. На нашем '
-                                    'занятии вы узнаете, '
-                                    'как рисовать скетчи от '
-                                    'руки с помощью разных '
-                                    'материалов: карандашей, '
-                                    'маркеров, пастели. '
-                                    '\n'
-                                    '\n  Вы научитесь выбирать '
-                                    'подходящие объекты '
-                                    'для скетчинга, определять перспективу и '
-                                    'светотень, создавать '
-                                    'композицию и цветовую '
-                                    'гамму. Мы покажем вам различные стили и '
-                                    'техники скетчинга. '
-                                    '\n'
-                                    '\n  Вы сможете создать свои уникальные '
-                                    'скетчи на любые темы: '
-                                    'природа, архитектура, '
-                                    'мода и многое другое.'
-                                    '\n'
-                                    '\n<u>Уточняйте актуальное расписание '
-                                    'и наличие мест у мастера!</u>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_sketching,
+            caption='<b>Скетчинг</b> - это техника быстрого '
+                    'рисования набросков и эскизов, которая '
+                    'помогает визуализировать идеи, эмоции и '
+                    'впечатления. На нашем '
+                    'занятии вы узнаете, '
+                    'как рисовать скетчи от '
+                    'руки с помощью разных '
+                    'материалов: карандашей, '
+                    'маркеров, пастели. '
+                    '\n'
+                    '\n  Вы научитесь выбирать '
+                    'подходящие объекты '
+                    'для скетчинга, определять перспективу и '
+                    'светотень, создавать '
+                    'композицию и цветовую '
+                    'гамму. Мы покажем вам различные стили и '
+                    'техники скетчинга. '
+                    '\n'
+                    '\n  Вы сможете создать свои уникальные '
+                    'скетчи на любые темы: '
+                    'природа, архитектура, '
+                    'мода и многое другое.'
+                    '\n'
+                    '\n<u>Уточняйте актуальное расписание '
+                    'и наличие мест у мастера!</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def tie_dye_info(message, offsite=False):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     if offsite:
         btn_text = '\U000026A1 Забронировать МК \U000026A1'
@@ -1370,45 +1339,45 @@ def tie_dye_info(message, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/tie_dye_photo.png', 'rb') as img_tie_dye:
-        caption = (f'<b>Тай-дай</b> - это техника '
-                   f'окрашивания ткани при помощи '
-                   f'скручивания, которая позволяет '
-                   f'создавать яркие и '
-                   f'оригинальные узоры. На нашем '
-                   f'занятии вы узнаете, как делать '
-                   f'тай-дай своими руками. Вы научитесь выбирать подходящие '
-                   f'красители и способы завязывания '
-                   f'ткани для получения разных '
-                   f'эффектов.\n\n Мы покажем вам различные стили и техники '
-                   f'тай-дай: от классического спирального до современного '
-                   f'мраморного. Вы сможете создать '
-                   f'свои уникальные вещи в стиле '
-                   f'тай-дай: футболки, платья, джинсы, шопперы и '
-                   f'другое.\n\n<b>А также при помощи тай-дай можно подарить '
-                   f'вторую жизнь своей любимой '
-                   f'вещи.</b>'
-                   f'\n\n{additional_info}')
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_tie_dye,
-                            caption=caption,
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        caption = (
+            f'<b>Тай-дай</b> - это техника '
+            f'окрашивания ткани при помощи '
+            f'скручивания, которая позволяет '
+            f'создавать яркие и '
+            f'оригинальные узоры. На нашем '
+            f'занятии вы узнаете, как делать '
+            f'тай-дай своими руками. Вы научитесь выбирать подходящие '
+            f'красители и способы завязывания '
+            f'ткани для получения разных '
+            f'эффектов.\n\n Мы покажем вам различные стили и техники '
+            f'тай-дай: от классического спирального до современного '
+            f'мраморного. Вы сможете создать '
+            f'свои уникальные вещи в стиле '
+            f'тай-дай: футболки, платья, джинсы, шопперы и '
+            f'другое.\n\n<b>А также при помощи тай-дай можно подарить '
+            f'вторую жизнь своей любимой '
+            f'вещи.</b>'
+            f'\n\n{additional_info}'
+        )
 
-    users_db.commit()
-    users_db.close()
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_tie_dye,
+            caption=caption,
+            parse_mode='html',
+            reply_markup=markup
+        )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def custom_cloth(message):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_back = types.InlineKeyboardButton(text='Назад',
@@ -1418,59 +1387,57 @@ def custom_cloth(message):
         url='https://t.me/elenitsa17')
     markup.row(btn_tg_dm)
     markup.row(btn_back)
-    BOT.delete_message(message.chat.id, message.id)
+
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/custom_cloth_img.png',
               'rb') as img_custom_cloth:
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_custom_cloth,
-                            caption='<b>Роспись одежды</b> - это творческий '
-                                    'способ преобразить свои '
-                                    'вещи и сделать их '
-                                    'уникальными. На нашем '
-                                    'занятии вы узнаете, '
-                                    'как рисовать на ткани акриловыми '
-                                    'красками и какие материалы, инструменты '
-                                    'для этого нужны. '
-                                    '\n'
-                                    '\n  Вы научитесь выбирать '
-                                    'подходящие рисунки '
-                                    'и узоры, переносить их '
-                                    'на одежду, а также '
-                                    'использовать разные техники: от простых '
-                                    'надписей, до полноценных картин. '
-                                    'Мы покажем '
-                                    'вам различные стили росписи: '
-                                    'от классических '
-                                    'цветочных мотивов до '
-                                    'современных абстрактных '
-                                    'рисунков. Вы сможете '
-                                    'разрисовать свою одежду '
-                                    'в соответствии со своим вкусом и стилем. '
-                                    '\n'
-                                    '\n  Мы используем специальные краски, '
-                                    'которые не смываются с ткани. Поэтому '
-                                    'расписанная вещь будет радовать '
-                                    'вас очень долго.'
-                                    '\n'
-                                    '\n<u>Уточняйте актуальное расписание, '
-                                    f'перечень изделий и наличие '
-                                    f'мест у мастера!</u>',
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_custom_cloth,
+            caption='<b>Роспись одежды</b> - это творческий '
+                    'способ преобразить свои '
+                    'вещи и сделать их '
+                    'уникальными. На нашем '
+                    'занятии вы узнаете, '
+                    'как рисовать на ткани акриловыми '
+                    'красками и какие материалы, инструменты '
+                    'для этого нужны. '
+                    '\n'
+                    '\n  Вы научитесь выбирать '
+                    'подходящие рисунки '
+                    'и узоры, переносить их '
+                    'на одежду, а также '
+                    'использовать разные техники: от простых '
+                    'надписей, до полноценных картин. '
+                    'Мы покажем '
+                    'вам различные стили росписи: '
+                    'от классических '
+                    'цветочных мотивов до '
+                    'современных абстрактных '
+                    'рисунков. Вы сможете '
+                    'разрисовать свою одежду '
+                    'в соответствии со своим вкусом и стилем. '
+                    '\n'
+                    '\n  Мы используем специальные краски, '
+                    'которые не смываются с ткани. Поэтому '
+                    'расписанная вещь будет радовать '
+                    'вас очень долго.'
+                    '\n'
+                    '\n<u>Уточняйте актуальное расписание, '
+                    f'перечень изделий и наличие '
+                    f'мест у мастера!</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def candles_info(message, offsite=False):
-    users_db = connect('UsersDB.sql')
-    cursor = users_db.cursor()
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
     if offsite:
         btn_text = '\U000026A1 Забронировать МК \U000026A1'
@@ -1493,38 +1460,37 @@ def candles_info(message, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    BOT.delete_message(message.chat.id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/candles_photo.png', 'rb') as img_candles:
-        caption = (f'<b>Ароматические свечи</b> - это не '
-                   f'только красивый и уютный '
-                   f'элемент декора, но и способ создать особую атмосферу в '
-                   f'доме.'
-                   f'\n\n На нашем занятии вы создадите свечу своими руками '
-                   f'из натуральных ингредиентов: соевого воска, '
-                   f'хлопкового или деревянного фитиля. '
-                   f'Вы сможете выбрать ароматы по своему вкусу '
-                   f'(более 20 различных ароматов). '
-                   f'Мы расскажем вам о '
-                   f'тонкостях процесса изготовления свечей, а также о том, '
-                   f'как правильно использовать и хранить их.'
-                   f'\n\n Вы получите не только полезные знания и навыки, '
-                   f'но и удовольствие от творчества и релаксации.'
-                   f'\n\n{additional_info}')
+        caption = (
+            f'<b>Ароматические свечи</b> - это не '
+            f'только красивый и уютный '
+            f'элемент декора, но и способ создать особую атмосферу в '
+            f'доме.'
+            f'\n\n На нашем занятии вы создадите свечу своими руками '
+            f'из натуральных ингредиентов: соевого воска, '
+            f'хлопкового или деревянного фитиля. '
+            f'Вы сможете выбрать ароматы по своему вкусу '
+            f'(более 20 различных ароматов). '
+            f'Мы расскажем вам о '
+            f'тонкостях процесса изготовления свечей, а также о том, '
+            f'как правильно использовать и хранить их.'
+            f'\n\n Вы получите не только полезные знания и навыки, '
+            f'но и удовольствие от творчества и релаксации.'
+            f'\n\n{additional_info}'
+        )
 
-        cursor.execute('INSERT INTO message_ids (chat_id, message_id)'
-                       ' VALUES (?, ?)',
-                       (message.chat.id,
-                        BOT.send_photo(
-                            message.chat.id,
-                            img_candles,
-                            caption=caption,
-                            parse_mode='html',
-                            reply_markup=markup).message_id))
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_candles,
+            caption=caption,
+            parse_mode='html',
+            reply_markup=markup
+        )
 
-    users_db.commit()
-    users_db.close()
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(content_types=['text'])
@@ -1648,8 +1614,8 @@ def handle_callback(callback):
         'gips_offsite': lambda message: gips_info(message, offsite=True),
         'help': start_help,
         'offsite_workshops': offsite_workshops,
-        'order': order,
-        'pay': pay,
+        'order': ordering,
+        'pay': payment,
         'shipment': shipment,
         'shop': shop,
         'sketching': sketching,

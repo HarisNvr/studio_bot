@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getenv
 
 from dotenv import load_dotenv
-from sqlalchemy import String, ForeignKey, create_engine, select, func
+from sqlalchemy import String, ForeignKey, create_engine, select, func, delete
 from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
                             relationship, Session)
 
@@ -64,6 +64,23 @@ class Message(Base):
     )
 
     user = relationship('User', back_populates='messages')
+
+
+def morning_routine():
+    """
+    Delete old message IDs from the DB. Telegram's policy doesn't allow bots
+    to delete messages that are older than 48 hours.
+    :return: Nothing
+    """
+
+    threshold = datetime.now() - timedelta(hours=51)
+
+    with Session(engine) as session:
+        stmt = delete(Message).where(
+            Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S'))
+
+        session.execute(stmt)
+        session.commit()
 
 
 def get_user_db_id(chat_id: int):
