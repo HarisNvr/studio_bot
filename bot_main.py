@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 from telebot import types
 from telebot.apihelper import ApiTelegramException
 
-from broadcast import start_broadcast
-from constants import ADMIN_IDS, BOT, DEL_TIME, ORG_NAME
-from dicts import get_lang_greet_text
-from directions import (
+from bot_funcs.broadcast import start_broadcast
+from bot_parts.constants import ADMIN_IDS, BOT, DEL_TIME, ORG_NAME
+from bot_parts.dicts import get_lang_greet_text
+from bot_funcs.directions import (
     candles_info, custom_cloth, gips_info, epoxy,
     sketching, tie_dye_info
 )

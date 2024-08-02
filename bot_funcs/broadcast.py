@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from telebot import types
 from telebot.apihelper import ApiTelegramException
 
-from constants import DEL_TIME, BOT
+from bot_parts.constants import DEL_TIME, BOT
 from sql_orm import get_user_db_id, record_message_id_to_db, engine, User
 
 BROADCAST_ADMIN_ID = None
