@@ -1097,18 +1097,15 @@ def handle_callback(callback):
             True
         ),
         'candles': lambda message: candles_info(
-            message,
-            BOT
+            message
         ),
         'candles_offsite': lambda message: candles_info(
             message,
-            BOT,
             offsite=True
         ),
         'clean': clean,
         'custom_cloth': lambda message: custom_cloth(
-            message,
-            BOT
+            message
         ),
         'delete_message': delete_message,
         'directions': directions,
@@ -1117,16 +1114,13 @@ def handle_callback(callback):
             offsite=True
         ),
         'epoxy': lambda message: epoxy(
-            message,
-            BOT
+            message
         ),
         'gips': lambda message: gips_info(
-            message,
-            BOT
+            message
         ),
         'gips_offsite': lambda message: gips_info(
             message,
-            BOT,
             offsite=True
         ),
         'help': start_help,
@@ -1136,19 +1130,16 @@ def handle_callback(callback):
         'shipment': shipment,
         'shop': shop,
         'sketching': lambda message: sketching(
-            message,
-            BOT
+            message
         ),
         'soc_profiles': soc_profiles,
         'studio': studio,
         'tarot': tarot_start,
         'tie_dye': lambda message: tie_dye_info(
-            message,
-            BOT
+            message
         ),
         'tie_dye_offsite': lambda message: tie_dye_info(
             message,
-            BOT,
             offsite=True
         )
     }

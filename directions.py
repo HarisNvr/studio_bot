@@ -2,7 +2,7 @@ from time import sleep
 
 from telebot import types
 
-from constants import DEL_TIME
+from constants import DEL_TIME, BOT
 from sql_orm import record_message_id_to_db, get_user_db_id
 
 
@@ -18,7 +18,7 @@ ADDITIONAL_INFO_OFFSITE = (
 )
 
 
-def epoxy(message, bot):
+def epoxy(message):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -36,11 +36,11 @@ def epoxy(message, bot):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    bot.delete_message(chat_id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/epoxy_img.png', 'rb') as img_epoxy:
-        sent_message = bot.send_photo(
+        sent_message = BOT.send_photo(
             chat_id,
             img_epoxy,
             caption=f'<b>Эпоксидная смола</b> - это '
@@ -81,7 +81,7 @@ def epoxy(message, bot):
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def gips_info(message, bot, offsite=False):
+def gips_info(message, offsite=False):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -106,7 +106,7 @@ def gips_info(message, bot, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    bot.delete_message(chat_id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/gips_img.png', 'rb') as img_gips:
@@ -128,7 +128,7 @@ def gips_info(message, bot, offsite=False):
             f'\n\n{additional_info}'
         )
 
-        sent_message = bot.send_photo(
+        sent_message = BOT.send_photo(
             chat_id,
             img_gips,
             caption=caption,
@@ -139,7 +139,7 @@ def gips_info(message, bot, offsite=False):
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def sketching(message, bot):
+def sketching(message):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -157,12 +157,12 @@ def sketching(message, bot):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    bot.delete_message(chat_id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/sketching_img.png',
               'rb') as img_sketching:
-        sent_message = bot.send_photo(
+        sent_message = BOT.send_photo(
             chat_id,
             img_sketching,
             caption='<b>Скетчинг</b> - это техника быстрого '
@@ -197,7 +197,7 @@ def sketching(message, bot):
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def tie_dye_info(message, bot, offsite=False):
+def tie_dye_info(message, offsite=False):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -222,7 +222,7 @@ def tie_dye_info(message, bot, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    bot.delete_message(chat_id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/tie_dye_photo.png', 'rb') as img_tie_dye:
@@ -247,7 +247,7 @@ def tie_dye_info(message, bot, offsite=False):
             f'\n\n{additional_info}'
         )
 
-        sent_message = bot.send_photo(
+        sent_message = BOT.send_photo(
             chat_id,
             img_tie_dye,
             caption=caption,
@@ -258,7 +258,7 @@ def tie_dye_info(message, bot, offsite=False):
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def custom_cloth(message, bot):
+def custom_cloth(message):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -274,12 +274,12 @@ def custom_cloth(message, bot):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    bot.delete_message(chat_id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/custom_cloth_img.png',
               'rb') as img_custom_cloth:
-        sent_message = bot.send_photo(
+        sent_message = BOT.send_photo(
             chat_id,
             img_custom_cloth,
             caption='<b>Роспись одежды</b> - это творческий '
@@ -321,7 +321,7 @@ def custom_cloth(message, bot):
     record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-def candles_info(message, bot, offsite=False):
+def candles_info(message, offsite=False):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
 
@@ -346,7 +346,7 @@ def candles_info(message, bot, offsite=False):
     markup.row(btn_tg_dm)
     markup.row(btn_back)
 
-    bot.delete_message(chat_id, message.id)
+    BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
     with open('studio_and_directions/candles_photo.png', 'rb') as img_candles:
@@ -368,7 +368,7 @@ def candles_info(message, bot, offsite=False):
             f'\n\n{additional_info}'
         )
 
-        sent_message = bot.send_photo(
+        sent_message = BOT.send_photo(
             chat_id,
             img_candles,
             caption=caption,
