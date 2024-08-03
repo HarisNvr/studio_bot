@@ -8,12 +8,13 @@ from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
 
 load_dotenv()
 
-DB_USER = getenv('POSTGRES_USER')
-DB_PASS = getenv('POSTGRES_PASSWORD')
-DB_NAME = getenv('POSTGRES_DB')
+DB_USER = getenv('DB_USER')
+DB_PASSWORD = getenv('DB_PASSWORD')
+DB_NAME = getenv('DB_NAME')
 DB_HOST = getenv('DB_HOST')
 
-DATABASE_URL = f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}'
+DATABASE_URL = (f'postgresql+psycopg2://'
+                f'{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}')
 
 engine = create_engine(
     DATABASE_URL,
