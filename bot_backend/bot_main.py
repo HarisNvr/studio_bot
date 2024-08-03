@@ -6,14 +6,20 @@ from sys import platform
 from time import sleep
 
 from dotenv import load_dotenv
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from telebot import types
-from telebot.apihelper import ApiTelegramException
 
-from bot_backend.bot_funcs.shop_delivery import shop, catalog, ordering, \
-    payment, shipment
+from bot_backend.bot_funcs.admin_only import (
+    admin, proportions, send_user_count
+)
+from bot_backend.bot_funcs.shop_delivery import (
+    shop, catalog, ordering, payment, shipment
+)
+from bot_backend.bot_funcs.user_funcs import (
+    clean, delete_user_messages, soc_profiles
+)
 from bot_funcs.broadcast import start_broadcast
 from bot_parts.constants import ADMIN_IDS, BOT, DEL_TIME, ORG_NAME
 from bot_parts.dicts import get_lang_greet_text
@@ -22,8 +28,7 @@ from bot_funcs.studio_and_directions import (
     sketching, tie_dye_info, directions, studio, offsite_workshops
 )
 from sql_orm import (
-    engine, record_message_id_to_db, Message, User, get_user_db_id,
-    get_users_count, morning_routine
+    engine, record_message_id_to_db, User, get_user_db_id, morning_routine
 )
 
 load_dotenv()
@@ -75,12 +80,6 @@ def check_is_admin(func):
             return chepuha(message)
 
     return wrapper
-
-
-@BOT.message_handler(commands=['broadcast'])
-@check_is_admin
-def broadcast(message):
-    start_broadcast(message)
 
 
 @BOT.message_handler(commands=['start', 'help'])
@@ -179,209 +178,32 @@ def start_help(message, keep_last_msg: bool = False):
         record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
-@BOT.message_handler(commands=['clean'])
+@BOT.message_handler(commands=['proportions', 'users', 'broadcast'])
 @check_bd_chat_id
-def clean(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_da = types.InlineKeyboardButton(
-        text='Да',
-        callback_data='delete_message'
-    )
-    btn_net = types.InlineKeyboardButton(
-        text='Нет',
-        callback_data='help'
-    )
-    markup.row(btn_da, btn_net)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    sent_message = BOT.send_message(
-        chat_id,
-        f'Вы хотите полностью очистить этот чат?'
-        f'\n\n*Сообщения, отправленные более 48ч. назад и рассылка '
-        f'удалены не будут',
-        reply_markup=markup
-    )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def delete_message(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    with Session(engine) as session:
-        message_ids = session.execute(
-            select(
-                Message.message_id
-            ).where(
-                Message.chat_id == user_db_id
-            )
-        ).scalars().all()
-
-        BOT.delete_message(chat_id, message.id)
-
-        sent_message = BOT.send_message(
-            chat_id,
-            f'<b>Идёт очистка чата</b> \U0001F9F9',
-            parse_mode='html'
-        )
-
-        for msg_id in message_ids:
-            try:
-                BOT.delete_message(chat_id, msg_id)
-                sleep(0.01)
-            except ApiTelegramException:
-                pass
-
-            session.execute(
-                delete(
-                    Message
-                ).where(
-                    Message.chat_id == user_db_id,
-                    Message.message_id == msg_id)
-            )
-            session.commit()
-
-    BOT.delete_message(sent_message.chat.id, sent_message.message_id)
-
-
-def admin(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(
-        text='Назад',
-        callback_data='help'
-    )
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    sent_message = BOT.send_message(
-        chat_id,
-        '<b>Добро пожаловать в админское меню!</b>'
-        '\n'
-        '\n/broadcast - Начать процедуру рассылки'
-        '\n'
-        '\n/users - Узнать сколько пользователей в БД'
-        '\n'
-        '\n/proportions - Калькулятор пропорций',
-        parse_mode='html',
-        reply_markup=markup
-    )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-@BOT.message_handler(commands=['proportions'])
 @check_is_admin
-def proportions(message, keep_last_msg: bool = False):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    if not keep_last_msg:
-        BOT.delete_message(chat_id, message.id)
-        sleep(DEL_TIME)
-
-    sent_message = BOT.send_message(
-        chat_id,
-        f'Введите через пробел: '
-        f'\nПропорции компонентов '
-        f'<b>A</b> и <b>B</b>, '
-        f'и общую массу - <b>C</b>',
-        parse_mode='html'
-    )
-
-    BOT.register_next_step_handler(message, calculate_proportions)
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
+def admin_commands(message):
+    if message.text == '/proportions':
+        proportions(message)
+    elif message.text == '/users':
+        send_user_count(message)
+    elif message.text == '/broadcast':
+        start_broadcast(message)
 
 
-def calculate_proportions(message):
-    user_db_id = get_user_db_id(message.chat.id)
-
-    record_message_id_to_db(user_db_id, message.message_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_another_one = types.InlineKeyboardButton(
-        'Другая пропорция',
-        callback_data='another_proportion'
-    )
-    markup.add(btn_another_one)
-
-    def is_number(item):
-        try:
-            float(item)
-            return True
-        except ValueError:
-            return False
-
-    prop_input_split = message.text.replace(',', '.').split()
-    digit_check = all(is_number(item) for item in prop_input_split)
-
-    if len(message.text.split()) == 3 and digit_check:
-        a_input, b_input, c_input = map(float, prop_input_split)
-
-        a_gr = (c_input / (a_input + b_input)) * a_input
-        b_gr = (c_input / (a_input + b_input)) * b_input
-
-        a_percent = 100 / (a_gr + b_gr) * a_gr
-        b_percent = 100 / (a_gr + b_gr) * b_gr
-
-        a_part_new = int(a_percent) if a_percent.is_integer() \
-            else round(a_percent, 2)
-        b_part_new = int(b_percent) if b_percent.is_integer() \
-            else round(b_percent, 2)
-
-        a_new = int(a_gr) if a_gr.is_integer() else round(a_gr, 2)
-        b_new = int(b_gr) if b_gr.is_integer() else round(b_gr, 2)
-        c_new = int(c_input) if c_input.is_integer() else round(c_input, 2)
-
-        sent_message = BOT.reply_to(
-            message,
-            f'Для раствора массой: <b>{c_new} гр.'
-            f'\nНеобходимо:</b>'
-            f'\n<b>{a_new} гр.</b> Компонента <b>A</b> '
-            f'({a_part_new} %)'
-            f'\n<b>{b_new} гр.</b> Компонента <b>B</b> '
-            f'({b_part_new} %)',
-            reply_markup=markup,
-            parse_mode='html'
-        )
-    else:
-        sent_message = BOT.reply_to(
-            message,
-            f'Неверный формат данных.'
-            f'\nПожалуйста, '
-            f'введите числа по образцу:\n<b>A B C</b>',
-            parse_mode='html'
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-@BOT.message_handler(commands=['users'])
-@check_is_admin
-def send_user_count(message):
-    chat_id = message.chat.id
-    count = get_users_count()
-
-    BOT.delete_message(chat_id, message.id)
-
-    sent_message = BOT.send_message(
-        chat_id,
-        f'Количество пользователей в БД: {count}'
-    )
-
-    sleep(3.5)
-    BOT.delete_message(chat_id, sent_message.message_id)
+@BOT.message_handler(commands=['clean', 'studio', 'mk', 'shop',
+                               'soc_profiles'])
+@check_bd_chat_id
+def user_commands(message):
+    if message.text == '/clean':
+        clean(message)
+    elif message.text == '/studio':
+        studio(message)
+    elif message.text == '/mk':
+        offsite_workshops(message)
+    elif message.text == '/shop':
+        shop(message)
+    elif message.text == '/soc_profiles':
+        soc_profiles(message)
 
 
 def tarot_start(message):
@@ -494,85 +316,6 @@ def tarot_main(message):
             record_message_id_to_db(user_db_id, tarot_message.message_id)
 
             sleep(tarot_delay)
-
-
-@BOT.message_handler(commands=['studio', 'mk', 'shop'])
-@check_bd_chat_id
-def command_handler(message):
-    if message.text == '/studio':
-        studio(message)
-    elif message.text == '/mk':
-        offsite_workshops(message)
-    elif message.text == '/shop':
-        shop(message)
-
-
-@BOT.message_handler(commands=['soc_profiles'])
-@check_bd_chat_id
-def soc_profiles(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-
-    btn_vk = types.InlineKeyboardButton(
-        text='Группа VK',
-        url=getenv('VK')
-    )
-
-    btn_inst = types.InlineKeyboardButton(
-        text='Instagram',
-        url=getenv('INSTAGRAM')
-    )
-
-    btn_tg_channel = types.InlineKeyboardButton(
-        text='Наш канал в Telegram',
-        url=getenv('TG_CHANNEL')
-    )
-
-    btn_wa = types.InlineKeyboardButton(
-        text='WhatsApp',
-        url=getenv('WA')
-    )
-
-    btn_ya_disk = types.InlineKeyboardButton(
-        text='Примеры работ на Я.Диск',
-        url=getenv('YA_DISK')
-    )
-
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='Telegram',
-        url=getenv('TG_DM')
-    )
-
-    btn_support = types.InlineKeyboardButton(
-        text='Тех. поддержка БОТА',
-        url=getenv('SUPPORT')
-    )
-
-    btn_back = types.InlineKeyboardButton(
-        text='Назад',
-        callback_data='help'
-    )
-
-    markup.row(btn_inst, btn_vk)
-    markup.row(btn_tg_dm, btn_wa)
-    markup.row(btn_tg_channel)
-    markup.row(btn_ya_disk)
-    markup.row(btn_support)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    sent_message = BOT.send_message(
-        chat_id,
-        f'<b>Какая <u>соц.сеть</u>, вас интересует:</b>',
-        parse_mode='html',
-        reply_markup=markup
-    )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.message_handler(content_types=['text', 'photo'])
@@ -703,7 +446,7 @@ def handle_callback(callback):
         'custom_cloth': lambda message: custom_cloth(
             message
         ),
-        'delete_message': delete_message,
+        'delete_message': delete_user_messages,
         'directions': directions,
         'directions_offsite': lambda message: directions(
             message,
