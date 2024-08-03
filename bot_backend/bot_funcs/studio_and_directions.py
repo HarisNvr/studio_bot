@@ -27,7 +27,179 @@ def relative_path(img_name):
     return relative_path_to_image.resolve()
 
 
+def studio(message):
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
 
+    markup = types.InlineKeyboardMarkup()
+    btn_dirs = types.InlineKeyboardButton(
+        'Подробнее о направлениях',
+        callback_data='directions'
+    )
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='help'
+    )
+    btn_2gis = types.InlineKeyboardButton(
+        text='Наша студия в 2GIS',
+        url='https://go.2gis.com/8od46'
+    )
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Записаться на МК \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+    markup.row(btn_dirs)
+    markup.row(btn_tg_dm)
+    markup.row(btn_2gis)
+    markup.row(btn_back)
+
+    BOT.delete_message(chat_id, message.id)
+    sleep(DEL_TIME)
+
+    with open(f'{relative_path("studio_img.png")}', 'rb') as img_studio:
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_studio,
+            caption=f'<b>Наша мастерская</b> – это то место, '
+                    f'где вы сможете раскрыть '
+                    f'свой потенциал и '
+                    f'реализовать идеи в разных направлениях: '
+                    f'свечеварение, эпоскидная смола, '
+                    f'рисование, '
+                    f'роспись одежды и многое другое. '
+                    '\n'
+                    '\n\U0001F4CD<u>Наши адреса:'
+                    '\n</u><b>\U00002693 г. Новороссийск, '
+                    'с. Цемдолина, ул. Цемесская, д. 10'
+                    '\n\U00002600 г. Анапа, с. Витязево, '
+                    'ул. Курганная, д. 29</b>',
+            parse_mode='html',
+            reply_markup=markup
+        )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
+
+
+def offsite_workshops(message):
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
+
+    markup = types.InlineKeyboardMarkup()
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='help'
+    )
+
+    btn_tg_dm = types.InlineKeyboardButton(
+        text='\U000026A1 Забронировать МК \U000026A1',
+        url='https://t.me/elenitsa17'
+    )
+
+    btn_directions_offsite = types.InlineKeyboardButton(
+        'Подробнее о направлениях',
+        callback_data='directions_offsite'
+    )
+
+    markup.row(btn_directions_offsite)
+    markup.row(btn_tg_dm)
+    markup.row(btn_back)
+
+    BOT.delete_message(chat_id, message.id)
+    sleep(DEL_TIME)
+
+    with open(f'{relative_path("offsite_workshops_img.png")}',
+              'rb') as img_studio:
+        sent_message = BOT.send_photo(
+            chat_id,
+            img_studio,
+            caption='<b>Вы хотите удивить гостей '
+                    'творческим мастер–классом?</b> '
+                    '\n'
+                    '\n Наша студия готова приехать к вам c '
+                    'оборудованием и материалами '
+                    'по любой теме '
+                    'из нашего каталога: свечеварение, '
+                    'рисование, '
+                    'роспись одежды и другие. '
+                    'Мы обеспечим все '
+                    'необходимое для проведения МК в любом '
+                    'месте – в помещении или '
+                    'на свежем воздухе. '
+                    '\n'
+                    '\n <u>Все гости получат новые '
+                    'знания, навыки '
+                    'и подарки, сделанные своими руками!</u>',
+            parse_mode='html',
+            reply_markup=markup
+        )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
+
+
+def directions(message, offsite=False):
+    chat_id = message.chat.id
+    user_db_id = get_user_db_id(chat_id)
+
+    markup = types.InlineKeyboardMarkup()
+    btn_epoxy = types.InlineKeyboardButton(
+        text='Эпоксидная смола',
+        callback_data='epoxy'
+    )
+    btn_gips = types.InlineKeyboardButton(
+        text='Гипс',
+        callback_data='gips'
+        if not offsite
+        else 'gips_offsite'
+    )
+    btn_sketching = types.InlineKeyboardButton(
+        text='Скетчинг',
+        callback_data='sketching'
+    )
+    btn_tie_dye = types.InlineKeyboardButton(
+        text='Тай-Дай',
+        callback_data='tie_dye'
+        if not offsite
+        else 'tie_dye_offsite'
+    )
+    btn_custom_cloth = types.InlineKeyboardButton(
+        text='Роспись одежды',
+        callback_data='custom_cloth'
+    )
+    btn_candles = types.InlineKeyboardButton(
+        text='Свечеварение',
+        callback_data='candles'
+        if not offsite
+        else 'candles_offsite'
+    )
+    btn_back = types.InlineKeyboardButton(
+        text='Назад',
+        callback_data='studio'
+        if not offsite
+        else 'offsite_workshops'
+    )
+
+    if not offsite:
+        markup.row(btn_epoxy, btn_gips)
+        markup.row(btn_sketching, btn_tie_dye)
+        markup.row(btn_custom_cloth, btn_candles)
+    else:
+        markup.row(btn_gips)
+        markup.row(btn_tie_dye)
+        markup.row(btn_candles)
+    markup.row(btn_back)
+
+    BOT.delete_message(chat_id, message.id)
+    sleep(DEL_TIME)
+
+    sent_message = BOT.send_message(
+        chat_id,
+        f'<b>Выберите <u>направление,</u> о котором хотите '
+        f'узнать подробнее:</b>',
+        parse_mode='html',
+        reply_markup=markup
+    )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 def epoxy(message):

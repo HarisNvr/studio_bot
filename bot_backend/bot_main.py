@@ -15,9 +15,9 @@ from telebot.apihelper import ApiTelegramException
 from bot_funcs.broadcast import start_broadcast
 from bot_parts.constants import ADMIN_IDS, BOT, DEL_TIME, ORG_NAME
 from bot_parts.dicts import get_lang_greet_text
-from bot_funcs.directions import (
+from bot_funcs.studio_and_directions import (
     candles_info, custom_cloth, gips_info, epoxy,
-    sketching, tie_dye_info
+    sketching, tie_dye_info, directions, studio, offsite_workshops
 )
 from sql_orm import (
     engine, record_message_id_to_db, Message, User, get_user_db_id,
@@ -494,183 +494,13 @@ def tarot_main(message):
             sleep(tarot_delay)
 
 
-@BOT.message_handler(commands=['studio'])
+@BOT.message_handler(commands=['studio', 'mk'])
 @check_bd_chat_id
-def studio(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_dirs = types.InlineKeyboardButton(
-        'Подробнее о направлениях',
-        callback_data='directions'
-    )
-    btn_back = types.InlineKeyboardButton(
-        text='Назад',
-        callback_data='help'
-    )
-    btn_2gis = types.InlineKeyboardButton(
-        text='Наша студия в 2GIS',
-        url='https://go.2gis.com/8od46'
-    )
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='\U000026A1 Записаться на МК \U000026A1',
-        url='https://t.me/elenitsa17'
-    )
-    markup.row(btn_dirs)
-    markup.row(btn_tg_dm)
-    markup.row(btn_2gis)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/studio_img.PNG', 'rb') as img_studio:
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_studio,
-            caption=f'<b>Наша мастерская</b> – это то место, '
-                    f'где вы сможете раскрыть '
-                    f'свой потенциал и '
-                    f'реализовать идеи в разных направлениях: '
-                    f'свечеварение, эпоскидная смола, '
-                    f'рисование, '
-                    f'роспись одежды и многое другое. '
-                    '\n'
-                    '\n\U0001F4CD<u>Наши адреса:'
-                    '\n</u><b>\U00002693 г. Новороссийск, '
-                    'с. Цемдолина, ул. Цемесская, д. 10'
-                    '\n\U00002600 г. Анапа, с. Витязево, '
-                    'ул. Курганная, д. 29</b>',
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-def directions(message, offsite=False):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_epoxy = types.InlineKeyboardButton(
-        text='Эпоксидная смола',
-        callback_data='epoxy'
-    )
-    btn_gips = types.InlineKeyboardButton(
-        text='Гипс',
-        callback_data='gips'
-        if not offsite
-        else 'gips_offsite'
-    )
-    btn_sketching = types.InlineKeyboardButton(
-        text='Скетчинг',
-        callback_data='sketching'
-    )
-    btn_tie_dye = types.InlineKeyboardButton(
-        text='Тай-Дай',
-        callback_data='tie_dye'
-        if not offsite
-        else 'tie_dye_offsite'
-    )
-    btn_custom_cloth = types.InlineKeyboardButton(
-        text='Роспись одежды',
-        callback_data='custom_cloth'
-    )
-    btn_candles = types.InlineKeyboardButton(
-        text='Свечеварение',
-        callback_data='candles'
-        if not offsite
-        else 'candles_offsite'
-    )
-    btn_back = types.InlineKeyboardButton(
-        text='Назад',
-        callback_data='studio'
-        if not offsite
-        else 'offsite_workshops'
-    )
-
-    if not offsite:
-        markup.row(btn_epoxy, btn_gips)
-        markup.row(btn_sketching, btn_tie_dye)
-        markup.row(btn_custom_cloth, btn_candles)
+def studio_offsite(message):
+    if message.text == '/studio':
+        studio(message)
     else:
-        markup.row(btn_gips)
-        markup.row(btn_tie_dye)
-        markup.row(btn_candles)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    sent_message = BOT.send_message(
-        chat_id,
-        f'<b>Выберите <u>направление,</u> о котором хотите '
-        f'узнать подробнее:</b>',
-        parse_mode='html',
-        reply_markup=markup
-    )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
-
-
-@BOT.message_handler(commands=['mk'])
-@check_bd_chat_id
-def offsite_workshops(message):
-    chat_id = message.chat.id
-    user_db_id = get_user_db_id(chat_id)
-
-    markup = types.InlineKeyboardMarkup()
-    btn_back = types.InlineKeyboardButton(
-        text='Назад',
-        callback_data='help'
-    )
-
-    btn_tg_dm = types.InlineKeyboardButton(
-        text='\U000026A1 Забронировать МК \U000026A1',
-        url='https://t.me/elenitsa17'
-    )
-
-    btn_directions_offsite = types.InlineKeyboardButton(
-        'Подробнее о направлениях',
-        callback_data='directions_offsite'
-    )
-
-    markup.row(btn_directions_offsite)
-    markup.row(btn_tg_dm)
-    markup.row(btn_back)
-
-    BOT.delete_message(chat_id, message.id)
-    sleep(DEL_TIME)
-
-    with open('studio_and_directions/offsite_workshops_img.PNG',
-              'rb') as img_studio:
-        sent_message = BOT.send_photo(
-            chat_id,
-            img_studio,
-            caption='<b>Вы хотите удивить гостей '
-                    'творческим мастер–классом?</b> '
-                    '\n'
-                    '\n Наша студия готова приехать к вам c '
-                    'оборудованием и материалами '
-                    'по любой теме '
-                    'из нашего каталога: свечеварение, '
-                    'рисование, '
-                    'роспись одежды и другие. '
-                    'Мы обеспечим все '
-                    'необходимое для проведения МК в любом '
-                    'месте – в помещении или '
-                    'на свежем воздухе. '
-                    '\n'
-                    '\n <u>Все гости получат новые '
-                    'знания, навыки '
-                    'и подарки, сделанные своими руками!</u>',
-            parse_mode='html',
-            reply_markup=markup
-        )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
+        offsite_workshops(message)
 
 
 @BOT.message_handler(commands=['shop'])
@@ -712,7 +542,7 @@ def shop(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('studio_and_directions/craft_shop.png', 'rb') as shop_img:
+    with open('shop_delivery/craft_shop.png', 'rb') as shop_img:
         sent_message = BOT.send_photo(
             chat_id,
             shop_img,
@@ -777,7 +607,7 @@ def shipment(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('studio_and_directions/shipment.jpg', 'rb') as shipment_img:
+    with open('shop_delivery/shipment.jpg', 'rb') as shipment_img:
         sent_message = BOT.send_photo(
             chat_id,
             shipment_img,
@@ -831,7 +661,7 @@ def payment(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('studio_and_directions/pay.png', 'rb') as pay_img:
+    with open('shop_delivery/pay.png', 'rb') as pay_img:
         sent_message = BOT.send_photo(
             chat_id,
             pay_img,
@@ -880,7 +710,7 @@ def ordering(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('studio_and_directions/order.jpg', 'rb') as img_order:
+    with open('shop_delivery/order.jpg', 'rb') as img_order:
         sent_message = BOT.send_photo(
             chat_id,
             img_order,
