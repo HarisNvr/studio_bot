@@ -3,8 +3,8 @@ from time import sleep
 
 from telebot import types
 
-from bot_backend.bot_parts.constants import DEL_TIME, BOT
-from bot_backend.sql_orm import record_message_id_to_db, get_user_db_id
+from bot_parts.constants import DEL_TIME, BOT
+from sql_orm import record_message_id_to_db, get_user_db_id
 
 
 def relative_path(img_name):

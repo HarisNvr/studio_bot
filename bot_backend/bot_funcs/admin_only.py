@@ -2,8 +2,8 @@ from time import sleep
 
 from telebot import types
 
-from bot_backend.bot_parts.constants import BOT, DEL_TIME
-from bot_backend.sql_orm import (
+from bot_parts.constants import BOT, DEL_TIME
+from sql_orm import (
     get_user_db_id, record_message_id_to_db, get_users_count
 )
 

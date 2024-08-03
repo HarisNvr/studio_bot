@@ -11,13 +11,13 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from telebot import types
 
-from bot_backend.bot_funcs.admin_only import (
+from bot_funcs.admin_only import (
     admin, proportions, send_user_count
 )
-from bot_backend.bot_funcs.shop_delivery import (
+from bot_funcs.shop_delivery import (
     shop, catalog, ordering, payment, shipment
 )
-from bot_backend.bot_funcs.user_funcs import (
+from bot_funcs.user_funcs import (
     clean, delete_user_messages, soc_profiles
 )
 from bot_funcs.broadcast import start_broadcast
