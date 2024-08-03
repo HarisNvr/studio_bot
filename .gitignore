@@ -151,4 +151,4 @@ media/
 
 # папки и файлы разработки
 Etc/
-alembic/versions/*
+bot_backend/alembic/versions/*

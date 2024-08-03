@@ -1,10 +1,10 @@
+from pathlib import Path
 from time import sleep
 
 from telebot import types
 
-from bot_parts.constants import DEL_TIME, BOT
-from sql_orm import record_message_id_to_db, get_user_db_id
-
+from bot_backend.bot_parts.constants import DEL_TIME, BOT
+from bot_backend.sql_orm import record_message_id_to_db, get_user_db_id
 
 ADDITIONAL_INFO = (
     '<u>Уточняйте актуальное расписание, '
@@ -16,6 +16,18 @@ ADDITIONAL_INFO_OFFSITE = (
     'изделий и стоимость выезда на локацию проведения '
     'уточняйте у мастера!</u>'
 )
+
+
+def relative_path(img_name):
+    current_dir = Path(__file__).resolve().parent
+
+    relative_path_to_image = (current_dir / '..' / 'studio_and_directions'
+                              / f'{img_name}')
+
+    return relative_path_to_image.resolve()
+
+
+
 
 
 def epoxy(message):
@@ -39,7 +51,7 @@ def epoxy(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('./studio_and_directions/epoxy_img.png', 'rb') as img_epoxy:
+    with open(f'{relative_path("epoxy_img.png")}', 'rb') as img_epoxy:
         sent_message = BOT.send_photo(
             chat_id,
             img_epoxy,
@@ -109,7 +121,7 @@ def gips_info(message, offsite=False):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('./studio_and_directions/gips_img.png', 'rb') as img_gips:
+    with open(f'{relative_path("gips_img.png")}', 'rb') as img_gips:
         caption = (
             f'<b>Гипс</b> - это универсальный '
             f'и простой в работе материал, '
@@ -160,8 +172,7 @@ def sketching(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('./studio_and_directions/sketching_img.png',
-              'rb') as img_sketching:
+    with open(f'{relative_path("sketching_img.png")}', 'rb') as img_sketching:
         sent_message = BOT.send_photo(
             chat_id,
             img_sketching,
@@ -225,8 +236,7 @@ def tie_dye_info(message, offsite=False):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('./studio_and_directions/tie_dye_photo.png',
-              'rb') as img_tie_dye:
+    with open(f'{relative_path("tie_dye_photo.png")}', 'rb') as img_tie_dye:
         caption = (
             f'<b>Тай-дай</b> - это техника '
             f'окрашивания ткани при помощи '
@@ -278,7 +288,7 @@ def custom_cloth(message):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('./studio_and_directions/custom_cloth_img.png',
+    with open(f'{relative_path("custom_cloth_img.png")}',
               'rb') as img_custom_cloth:
         sent_message = BOT.send_photo(
             chat_id,
@@ -350,8 +360,7 @@ def candles_info(message, offsite=False):
     BOT.delete_message(chat_id, message.id)
     sleep(DEL_TIME)
 
-    with open('./studio_and_directions/candles_photo.png',
-              'rb') as img_candles:
+    with open(f'{relative_path("candles_photo.png")}', 'rb') as img_candles:
         caption = (
             f'<b>Ароматические свечи</b> - это не '
             f'только красивый и уютный '
