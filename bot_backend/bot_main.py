@@ -1,8 +1,6 @@
 from os import getenv
 
 from dotenv import load_dotenv
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from bot_funcs.admin_only import admin, proportions, send_user_count
 from bot_funcs.broadcast import start_broadcast
@@ -16,7 +14,7 @@ from bot_funcs.user_funcs import (
 )
 from bot_parts.constants import ADMIN_IDS, BOT
 from sql_orm import (
-    engine, record_message_id_to_db, User, get_user_db_id, morning_routine
+    record_message_id_to_db, get_user_db_id, morning_routine, check_bd_chat_id
 )
 
 load_dotenv()
@@ -25,31 +23,6 @@ morning_routine()
 
 for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
     ADMIN_IDS.append(int(ADMIN_ID))
-
-
-def check_bd_chat_id(func):
-    """
-    Decorator to check if a user's chat ID exists in the database.
-    If not found, it suggests the user to press
-    /start to initialize their chat session.
-
-    :param func: The function to be decorated.
-    :return: The decorated function.
-    """
-
-    def wrapper(message, *args):
-        chat_id = message.chat.id
-
-        with Session(engine) as session:
-            stmt = select(User).where(User.chat_id == chat_id)
-            result = session.execute(stmt).scalar()
-
-        if result:
-            return func(message, *args)
-        else:
-            return chepuha(message, new_user=True)
-
-    return wrapper
 
 
 def check_is_admin(func):
@@ -157,53 +130,28 @@ def message_input(message):
         chepuha(message)
 
 
-def chepuha(message, new_user: bool = False):
+def chepuha(message):
     chat_id = message.chat.id
     user_first_name = message.chat.first_name
-    username = message.chat.username
 
-    def chepuha_message(command: str):
-        text = (
+    user_db_id = get_user_db_id(chat_id)
+
+    sent_message = BOT.send_message(
+        message.chat.id,
+        text=(
             f'Извините <u>{user_first_name}</u>, '
-            f'я вас не понимаю. '
-            f'\n'
-            f'\nПопробуйте написать '
-            f'{command} для возврата в '
-            f'главное меню или воспользуйтесь '
-            f'кнопкой "Меню" '
-            f'около окна ввода сообщения'
-        )
+            'я вас не понимаю. '
+            '\n'
+            '\nПопробуйте написать '
+            '/help для возврата в '
+            'главное меню или воспользуйтесь '
+            'кнопкой "Меню" '
+            'около окна ввода сообщения'
+        ),
+        parse_mode='html'
+    )
 
-        return text
-
-    if not new_user:
-        user_db_id = get_user_db_id(chat_id)
-
-        sent_message = BOT.send_message(
-            message.chat.id,
-            text=chepuha_message('/help'),
-            parse_mode='html'
-        )
-
-        record_message_id_to_db(user_db_id, sent_message.message_id)
-    else:
-        sent_message = BOT.send_message(
-            message.chat.id,
-            text=chepuha_message('start'),
-            parse_mode='html'
-        )
-
-        with Session(engine) as session:
-            user_record = User(
-                chat_id=chat_id,
-                username=username,
-                user_first_name=user_first_name
-            )
-            session.add(user_record)
-            session.commit()
-
-            record_message_id_to_db(user_record.id, message.message_id)
-            record_message_id_to_db(user_record.id, sent_message.message_id)
+    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.callback_query_handler(func=lambda callback: True)

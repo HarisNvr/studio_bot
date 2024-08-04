@@ -2,19 +2,21 @@ from datetime import datetime, timedelta
 from os import getenv
 
 from dotenv import load_dotenv
-from sqlalchemy import String, ForeignKey, create_engine, select, func, delete
-from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column,
-                            relationship, Session)
+from sqlalchemy import String, ForeignKey, create_engine, select, func, delete, \
+    update
+from sqlalchemy.orm import (
+    DeclarativeBase, Mapped, mapped_column, relationship, Session
+)
 
 load_dotenv()
 
-DB_USER = getenv('DB_USER')
-DB_PASSWORD = getenv('DB_PASSWORD')
-DB_NAME = getenv('DB_NAME')
+POSTGRES_USER = getenv('POSTGRES_USER')
+POSTGRES_PASSWORD = getenv('POSTGRES_PASSWORD')
+POSTGRES_DB = getenv('POSTGRES_DB')
 DB_HOST = getenv('DB_HOST')
 
 DATABASE_URL = (f'postgresql+psycopg2://'
-                f'{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}')
+                f'{POSTGRES_USER}:{POSTGRES_PASSWORD}@{DB_HOST}/{POSTGRES_DB}')
 
 engine = create_engine(
     DATABASE_URL,
@@ -65,6 +67,52 @@ class Message(Base):
     )
 
     user = relationship('User', back_populates='messages')
+
+
+def check_bd_chat_id(function):
+    """
+    Decorator to check if a user's chat ID exists in the database.
+    If not found, it suggests the user to press
+    /start to initialize their chat session.
+
+    :param function: The function to be decorated.
+    :return: The decorated function.
+    """
+
+    def wrapper(message, *args):
+        chat_id = message.chat.id
+        user_first_name = message.chat.first_name
+        username = message.chat.username
+
+        with Session(engine) as session:
+            stmt = select(User).where(User.chat_id == chat_id)
+            result = session.execute(stmt).scalar()
+
+        if result:
+            if (result.username != username or
+                    result.user_first_name != user_first_name):
+                session.execute(
+                    update(User).where(User.chat_id == chat_id).values(
+                        username=username,
+                        user_first_name=user_first_name
+                    )
+                )
+
+            return function(message, *args)
+        else:
+            with Session(engine) as session:
+                user_record = User(
+                    chat_id=chat_id,
+                    username=username,
+                    user_first_name=user_first_name
+                )
+                session.add(user_record)
+                session.commit()
+
+                record_message_id_to_db(user_record.id, message.message_id)
+                return function(message, *args)
+
+    return wrapper
 
 
 def morning_routine():

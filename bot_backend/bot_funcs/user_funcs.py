@@ -23,7 +23,9 @@ load_dotenv()
 def start_help(message, keep_last_msg: bool = False):
     user_first_name = message.chat.first_name
     chat_id = message.chat.id
-    username = message.chat.username
+    user_db_id = get_user_db_id(chat_id)
+
+    record_message_id_to_db(user_db_id, message.message_id)
 
     markup = types.InlineKeyboardMarkup()
     btn_soc_profiles = types.InlineKeyboardButton(
@@ -61,32 +63,6 @@ def start_help(message, keep_last_msg: bool = False):
         )
         markup.row(btn_admin)
 
-    with Session(engine) as session:
-        try:
-            user_record = session.execute(
-                select(User).where(User.chat_id == chat_id)).scalar_one()
-
-            if (user_record.username != username or
-                    user_record.user_first_name != user_first_name):
-                session.execute(
-                    update(User).where(User.chat_id == chat_id).values(
-                        username=username,
-                        user_first_name=user_first_name
-                    )
-                )
-        except NoResultFound:
-            user_record = User(
-                chat_id=chat_id,
-                username=username,
-                user_first_name=user_first_name
-            )
-            session.add(user_record)
-            session.commit()
-
-        user_db_id = user_record.id
-
-    record_message_id_to_db(user_record.id, message.message_id)
-
     if message.text == '/start':
         sent_message = BOT.send_message(
             chat_id,
@@ -97,7 +73,7 @@ def start_help(message, keep_last_msg: bool = False):
             reply_markup=markup
         )
 
-        record_message_id_to_db(user_record.id, sent_message.message_id)
+        record_message_id_to_db(user_db_id, sent_message.message_id)
     else:
         if not keep_last_msg:
             BOT.delete_message(chat_id, message.id)
