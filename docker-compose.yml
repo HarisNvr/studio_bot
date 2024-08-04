@@ -1,9 +1,11 @@
 volumes:
   postgres_data:
+  alembic_data:
 
 services:
   postgres:
-    image: postgres:13.3
+    container_name: postgres
+    image: postgres:latest
     env_file: .env
     ports:
       - "5432:5432"
@@ -11,7 +13,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   backend:
+    container_name: bot_backend
     build: ./bot_backend/
     env_file: .env
+    volumes:
+      - alembic_data:/bot_backend/alembic/versions
     depends_on:
       - postgres

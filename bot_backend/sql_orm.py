@@ -1,9 +1,13 @@
+import subprocess
 from datetime import datetime, timedelta
 from os import getenv
+from time import sleep
 
 from dotenv import load_dotenv
-from sqlalchemy import String, ForeignKey, create_engine, select, func, delete, \
-    update
+from sqlalchemy import (
+    String, ForeignKey, create_engine, select, func, delete, update
+)
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column, relationship, Session
 )
@@ -118,18 +122,30 @@ def check_bd_chat_id(function):
 def morning_routine():
     """
     Delete old message IDs from the DB. Telegram's policy doesn't allow bots
-    to delete messages that are older than 48 hours.
+    to delete messages that are older than 48 hours. Wake's up a little bit
+    slow, to give the database time to fully load.
     :return: Nothing
     """
 
-    threshold = datetime.now() - timedelta(hours=51)
+    sleep(5)
 
-    with Session(engine) as session:
-        stmt = delete(Message).where(
-            Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S'))
+    session = Session(engine)
+    threshold = datetime.now() - timedelta(hours=48)
+    stmt = delete(Message).where(
+        Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S')
+    )
 
+    try:
         session.execute(stmt)
         session.commit()
+    except ProgrammingError:
+        subprocess.run(
+            'alembic revision --autogenerate -m "Initial migration"',
+            shell=True
+        )
+        subprocess.run('alembic upgrade head', shell=True)
+    finally:
+        session.close()
 
 
 def get_user_db_id(chat_id: int):
