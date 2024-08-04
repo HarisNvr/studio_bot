@@ -8,13 +8,17 @@
 
 ### Технологии:
 
-Python, pyTelegramBotAPI, SQLite3
+_Python, pyTelegramBotAPI, SQAlchemy 2.0, Alembic, PostgreSQL, Docker_
 
 ### Развернуть проект на удаленном сервере:
 
+**Предполагается, что на вашей машине уже установлен Docker с плагином Docker-compose!**
+
+Официальный гайд по установке: https://docs.docker.com/engine/install/
+
 - Клонировать репозиторий и перейти в него:
 ```
-git clone https://github.com/HarisNvr/EleniWS_BOT.git
+git clone https://github.com/HarisNvr/studio_bot.git
 cd studio_bot
 ```
 - Настраиваем переменные окружения:
@@ -24,13 +28,21 @@ sudo nano .env
 ```
 # ПРИМЕР ФАЙЛА .env
 
-# Global Vars
-ADMIN_IDS=12345678,87654321  # Идентификаторы администраторов через запятую
+#Global Vars
+ADMIN_IDS= #Telegram_ID администраторов
 
-# BOT_TOKENS
-BOT=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz  # Токен вашего бота от BotFather
+#BOT_TOKENS
+BOT= #Telegram_API_bot_token
 
-# Soc_Profiles
+#Postgre_Stuff
+POSTGRES_USER= #Имя пользователя для доступа к БД
+DB_PASSWORD= #Пароль для доступа к БД
+POSTGRES_DB= #Имя БД
+DB_HOST=postgres #Имя контейнера с БД
+DB_PORT=5432 #Порт контейнера с БД
+ENGINE_ECHO=True/False #Вывод отладки БД в консоль
+
+#Soc_Profiles
 INSTAGRAM=https://instagram.com/yourprofile  # Ссылка на Instagram профиль
 VK=https://vk.com/yourprofile  # Ссылка на VK профиль
 TG_DM=https://t.me/yourusername  # Ссылка для прямого сообщения в Telegram
@@ -39,44 +51,21 @@ WA=https://wa.me/1234567890  # Ссылка для общения в WhatsApp
 YA_DISK=https://disk.yandex.ru/yourdisk  # Ссылка на Яндекс.Диск
 SUPPORT=https://support.yoursite.com  # Ссылка на страницу поддержки
 
-# Some_stuff
+#Some_stuff
 ORG_NAME=ACME_CORP # Название вашей организации
 
 ```
-- Установим и создадим виртуально окружение, установим зависимости:
+- Запускаем Docker композицию:
 ```
-python -m pip install --upgrade pip 
-pip install virtualenv
-virtualenv venv
-source venv/bin/activate
-pip install -r requirements.txt
-deactivate
+docker compose up -d
+# Бот выжидает 5 секунд, после подключается к контейнеру с БД.
 ```
-- Пропишем следующую команду для настройки беспрерывной работы нашего бота:
+**Бот при первом запуске сам создаст и применит миграции Alembic. Они будут хранится в томе "alembic_data", БД хранится в "postgres_data"**
+- Если вы будете менять модели в ORM, вам будет необходимо создать и применить новые миграции:
 ```
-nano /lib/systemd/system/studio_bot.service
-```
-```
-[Unit]
-Description=Описание вашего бота
-After=network.target
-
-[Service]
-EnvironmentFile=/etc/environment
-ExecStart=/home/studio_bot/venv/bin/python bot_main.py
-ExecReload=/home/studio_bot/venv/bin/python bot_main.py
-WorkingDirectory=/home/studio_bot/
-KillMode=process
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-- Запускаем нашего бота, но уже с беспрерывной работой.
-```
-sudo systemctl enable studio_bot
-sudo systemctl start studio_bot
+docker container exec -it bot_backend sh
+alembic revision --autogenerate -m "Commit message"
+alembic upgrade head
 ```
 ## Команды, вводимые через '/' в чате:
 ```
