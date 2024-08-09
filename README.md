@@ -31,7 +31,7 @@ cd studio_bot
 sudo nano .env
 ```
 ```
-# ПРИМЕР ФАЙЛА .env
+# ПРИМЕР ФАЙЛА .env (шаблон в формате txt есть в корне проекта)
 
 #Global Vars
 ADMIN_IDS= #Telegram_ID администраторов
