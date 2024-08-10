@@ -23,7 +23,7 @@ def sub_check(chat_id):
     try:
         result = BOT.get_chat_member(CHANNEL_ID, chat_id)
 
-        if result.status == 'member':
+        if result.status in ['member', 'administrator', 'creator']:
             return True
         else:
             return False

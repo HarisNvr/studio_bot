@@ -127,7 +127,7 @@ def morning_routine():
     :return: Nothing
     """
 
-    sleep(5)
+    sleep(2)
 
     session = Session(engine)
     threshold = datetime.now() - timedelta(hours=48)
