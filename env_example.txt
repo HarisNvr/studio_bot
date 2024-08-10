@@ -12,6 +12,10 @@ DB_HOST=
 DB_PORT=
 ENGINE_ECHO=
 
+#Alembic_Stuff
+MIGRATE=
+COMMIT_MESSAGE=
+
 #Soc_Profiles
 INSTAGRAM=
 VK=

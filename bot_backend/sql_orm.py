@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from sqlalchemy import (
     String, ForeignKey, create_engine, select, func, delete
 )
-from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column, relationship, Session
 )
@@ -80,26 +79,26 @@ def morning_routine():
     slow, to give the database time to fully load.
     :return: Nothing
     """
+    bd_access_delay = 2.5
+    sleep(bd_access_delay)
 
-    sleep(2)
-
-    session = Session(engine)
-    threshold = datetime.now() - timedelta(hours=48)
-    stmt = delete(Message).where(
-        Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S')
-    )
-
-    try:
-        session.execute(stmt)
-        session.commit()
-    except ProgrammingError:
+    if getenv('MIGRATE', '').lower() == 'true':
         subprocess.run(
-            'alembic revision --autogenerate -m "Initial migration"',
+            f'alembic revision --autogenerate -m "{getenv("COMMIT_MESSAGE")}"',
             shell=True
         )
         subprocess.run('alembic upgrade head', shell=True)
-    finally:
-        session.close()
+    else:
+        threshold = datetime.now() - timedelta(hours=48)
+        stmt = delete(Message).where(
+            Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S')
+        )
+
+        with Session(engine) as session:
+            session.execute(stmt)
+            session.commit()
+
+    sleep(bd_access_delay)
 
 
 def get_user_db_id(chat_id: int):
