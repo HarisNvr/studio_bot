@@ -5,7 +5,7 @@ from time import sleep
 
 from dotenv import load_dotenv
 from sqlalchemy import (
-    String, ForeignKey, create_engine, select, func, delete, update
+    String, ForeignKey, create_engine, select, func, delete
 )
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import (
@@ -71,52 +71,6 @@ class Message(Base):
     )
 
     user = relationship('User', back_populates='messages')
-
-
-def check_bd_chat_id(function):
-    """
-    Decorator to check if a user's chat ID exists in the database.
-    If not found, it suggests the user to press
-    /start to initialize their chat session.
-
-    :param function: The function to be decorated.
-    :return: The decorated function.
-    """
-
-    def wrapper(message, *args):
-        chat_id = message.chat.id
-        user_first_name = message.chat.first_name
-        username = message.chat.username
-
-        with Session(engine) as session:
-            stmt = select(User).where(User.chat_id == chat_id)
-            result = session.execute(stmt).scalar()
-
-        if result:
-            if (result.username != username or
-                    result.user_first_name != user_first_name):
-                session.execute(
-                    update(User).where(User.chat_id == chat_id).values(
-                        username=username,
-                        user_first_name=user_first_name
-                    )
-                )
-
-            return function(message, *args)
-        else:
-            with Session(engine) as session:
-                user_record = User(
-                    chat_id=chat_id,
-                    username=username,
-                    user_first_name=user_first_name
-                )
-                session.add(user_record)
-                session.commit()
-
-                record_message_id_to_db(user_record.id, message.message_id)
-                return function(message, *args)
-
-    return wrapper
 
 
 def morning_routine():

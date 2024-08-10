@@ -265,7 +265,7 @@ def tarot_start(message):
         user = session.execute(stmt).scalar()
     last_tarot_date = user.last_tarot_date
 
-    today = datetime.today().date().strftime('%d-%m-%Y')
+    today = datetime.today().date()
 
     if chat_id in ADMIN_IDS:
         BOT.delete_message(chat_id, message.id)
@@ -356,3 +356,27 @@ def tarot_main(message):
             record_message_id_to_db(user_db_id, tarot_message.message_id)
 
             sleep(tarot_delay)
+
+
+def chepuha(message):
+    chat_id = message.chat.id
+    user_first_name = message.chat.first_name
+
+    user_db_id = get_user_db_id(chat_id)
+
+    sent_message = BOT.send_message(
+        message.chat.id,
+        text=(
+            f'Извините <u>{user_first_name}</u>, '
+            'я вас не понимаю. '
+            '\n'
+            '\nПопробуйте написать '
+            '/help для возврата в '
+            'главное меню или воспользуйтесь '
+            'кнопкой "Меню" '
+            'около окна ввода сообщения'
+        ),
+        parse_mode='html'
+    )
+
+    record_message_id_to_db(user_db_id, sent_message.message_id)

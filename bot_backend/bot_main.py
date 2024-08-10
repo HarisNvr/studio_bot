@@ -6,32 +6,15 @@ from bot_funcs.studio_and_directions import (
     sketching, tie_dye_info, directions, studio, offsite_workshops
 )
 from bot_funcs.user_funcs import (
-    clean, delete_user_messages, soc_profiles, start_help, tarot_start
+    clean, delete_user_messages, soc_profiles, start_help, tarot_start, chepuha
 )
-from bot_parts.constants import ADMIN_IDS, BOT
+from bot_parts.constants import BOT
+from bot_parts.wrappers import check_bd_chat_id, check_is_admin
 from sql_orm import (
-    record_message_id_to_db, get_user_db_id, morning_routine, check_bd_chat_id
+    record_message_id_to_db, get_user_db_id, morning_routine
 )
 
 morning_routine()
-
-
-def check_is_admin(func):
-    """
-    A decorator that checks whether the user is an admin.
-
-    :param func: The function to be decorated.
-    :return: The decorated function.
-    """
-
-    def wrapper(message, *args):
-        chat_id = message.chat.id
-        if chat_id in ADMIN_IDS:
-            return func(message, *args)
-        else:
-            return chepuha(message)
-
-    return wrapper
 
 
 @BOT.message_handler(commands=['proportions', 'users', 'broadcast'])
@@ -119,30 +102,6 @@ def message_input(message):
         record_message_id_to_db(user_db_id, sent_message.message_id)
     else:
         chepuha(message)
-
-
-def chepuha(message):
-    chat_id = message.chat.id
-    user_first_name = message.chat.first_name
-
-    user_db_id = get_user_db_id(chat_id)
-
-    sent_message = BOT.send_message(
-        message.chat.id,
-        text=(
-            f'Извините <u>{user_first_name}</u>, '
-            'я вас не понимаю. '
-            '\n'
-            '\nПопробуйте написать '
-            '/help для возврата в '
-            'главное меню или воспользуйтесь '
-            'кнопкой "Меню" '
-            'около окна ввода сообщения'
-        ),
-        parse_mode='html'
-    )
-
-    record_message_id_to_db(user_db_id, sent_message.message_id)
 
 
 @BOT.callback_query_handler(func=lambda callback: True)
