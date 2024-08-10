@@ -6,18 +6,29 @@ from time import sleep
 
 from dotenv import load_dotenv
 from sqlalchemy import delete, select, update
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from telebot import types
 from telebot.apihelper import ApiTelegramException
 
-from bot_parts.constants import BOT, DEL_TIME, ORG_NAME, ADMIN_IDS
+from bot_parts.constants import BOT, DEL_TIME, ORG_NAME, ADMIN_IDS, CHANNEL_ID
 from bot_parts.dicts import get_lang_greet_text
 from sql_orm import (
     get_user_db_id, record_message_id_to_db, Message, engine, User
 )
 
 load_dotenv()
+
+
+def sub_check(chat_id):
+    try:
+        result = BOT.get_chat_member(CHANNEL_ID, chat_id)
+
+        if result.status == 'member':
+            return True
+        else:
+            return False
+    except ApiTelegramException:
+        return False
 
 
 def start_help(message, keep_last_msg: bool = False):
@@ -72,8 +83,27 @@ def start_help(message, keep_last_msg: bool = False):
             parse_mode='html',
             reply_markup=markup
         )
-
         record_message_id_to_db(user_db_id, sent_message.message_id)
+
+        if not sub_check(chat_id):
+            markup_unsubscribed = types.InlineKeyboardMarkup()
+            btn_tg_channel = types.InlineKeyboardButton(
+                text='Наш канал в Telegram',
+                url=getenv('TG_CHANNEL')
+            )
+            markup_unsubscribed.row(btn_tg_channel)
+
+            sleep(DEL_TIME)
+
+            sent_message = BOT.send_message(
+                chat_id,
+                '<b>Я также заметил, что вы не подписаны на наш ТГ канал, '
+                'это никак не повлияет на мою работу, но мы были бы '
+                'рады вас видеть</b> \U00002665',
+                parse_mode='html',
+                reply_markup=markup_unsubscribed
+            )
+            record_message_id_to_db(user_db_id, sent_message.message_id)
     else:
         if not keep_last_msg:
             BOT.delete_message(chat_id, message.id)

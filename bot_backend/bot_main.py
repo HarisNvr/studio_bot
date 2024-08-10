@@ -1,7 +1,3 @@
-from os import getenv
-
-from dotenv import load_dotenv
-
 from bot_funcs.admin_only import admin, proportions, send_user_count
 from bot_funcs.broadcast import start_broadcast
 from bot_funcs.shop_delivery import shop, catalog, ordering, payment, shipment
@@ -17,12 +13,7 @@ from sql_orm import (
     record_message_id_to_db, get_user_db_id, morning_routine, check_bd_chat_id
 )
 
-load_dotenv()
-
 morning_routine()
-
-for ADMIN_ID in (getenv('ADMIN_IDS').split(',')):
-    ADMIN_IDS.append(int(ADMIN_ID))
 
 
 def check_is_admin(func):

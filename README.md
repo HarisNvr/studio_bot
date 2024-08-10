@@ -34,18 +34,18 @@ sudo nano .env
 # ПРИМЕР ФАЙЛА .env (шаблон в формате txt есть в корне проекта)
 
 #Global Vars
-ADMIN_IDS= #Telegram_ID администраторов
+ADMIN_IDS=  # Telegram_ID администраторов
 
 #BOT_TOKENS
-BOT= #Telegram_API_bot_token
+BOT=  # Telegram_API_bot_token
 
 #Postgre_Stuff
-POSTGRES_USER= #Имя пользователя для доступа к БД
-DB_PASSWORD= #Пароль для доступа к БД
-POSTGRES_DB= #Имя БД
-DB_HOST=postgres #Имя контейнера с БД
-DB_PORT=5432 #Порт контейнера с БД
-ENGINE_ECHO=True/False #Вывод отладки БД в консоль
+POSTGRES_USER=  # Имя пользователя для доступа к БД
+DB_PASSWORD=  # Пароль для доступа к БД
+POSTGRES_DB=  # Имя БД
+DB_HOST=postgres  # Имя контейнера с БД
+DB_PORT=5432  # Порт контейнера с БД
+ENGINE_ECHO=True/False  # Вывод отладки БД в консоль
 
 #Soc_Profiles
 INSTAGRAM=https://instagram.com/yourprofile  # Ссылка на Instagram профиль
@@ -57,9 +57,10 @@ YA_DISK=https://disk.yandex.ru/yourdisk  # Ссылка на Яндекс.Дис
 SUPPORT=https://support.yoursite.com  # Ссылка на страницу поддержки
 
 #Some_stuff
-ORG_NAME=ACME_CORP # Название вашей организации
-
+ORG_NAME=ACME_CORP  # Название вашей организации
+CHANNEL_ID=  # Telegram_ID вашего канала
 ```
+#### Помочь узнать нужные ID может: https://t.me/getmyid_bot
 - Запускаем Docker композицию:
 ```
 docker compose up -d
