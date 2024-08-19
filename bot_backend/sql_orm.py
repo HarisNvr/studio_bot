@@ -5,7 +5,8 @@ from time import sleep
 
 from dotenv import load_dotenv
 from sqlalchemy import (
-    String, ForeignKey, create_engine, select, func, delete
+    String, ForeignKey, create_engine, select, func, delete, Boolean,
+    TIMESTAMP
 )
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column, relationship, Session
@@ -27,14 +28,6 @@ engine = create_engine(
 )
 
 
-def current_time():
-    """
-    :return: Current time in format %Y-%m-%d %H:%M:%S
-    """
-
-    return str(datetime.now()).split('.')[0]
-
-
 class Base(DeclarativeBase):
     pass
 
@@ -46,8 +39,13 @@ class User(Base):
     chat_id: Mapped[int] = mapped_column(unique=True)
     username: Mapped[str] = mapped_column(String(32))
     user_first_name: Mapped[str] = mapped_column(String(32))
-    last_tarot_date: Mapped[str] = mapped_column(
-        String(20),
+    last_tarot_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+        default=None,
+    )
+    is_subscribed: Mapped[bool] = mapped_column(
+        Boolean,
         nullable=True,
         default=None
     )
@@ -65,8 +63,10 @@ class Message(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(ForeignKey('Users.id'))
     message_id: Mapped[int] = mapped_column()
-    date_added: Mapped[str] = mapped_column(
-        default=current_time
+    message_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=datetime.now,
+        nullable=False,
     )
 
     user = relationship('User', back_populates='messages')
@@ -91,7 +91,7 @@ def morning_routine():
     else:
         threshold = datetime.now() - timedelta(hours=48)
         stmt = delete(Message).where(
-            Message.date_added < threshold.strftime('%Y-%m-%d %H:%M:%S')
+            Message.message_date < threshold
         )
 
         with Session(engine) as session:

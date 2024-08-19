@@ -107,8 +107,7 @@ def start_help(message, keep_last_msg: bool = False):
     else:
         if not keep_last_msg:
             BOT.delete_message(chat_id, message.id)
-        else:
-            pass
+
         sleep(DEL_TIME)
 
         sent_message = BOT.send_message(
@@ -263,17 +262,18 @@ def tarot_start(message):
     with Session(engine) as session:
         stmt = select(User).where(User.chat_id == chat_id)
         user = session.execute(stmt).scalar()
-    last_tarot_date = user.last_tarot_date
 
-    today = datetime.today().date()
+    last_tarot_date = user.last_tarot_date.date()
+    today = datetime.now()
 
     if chat_id in ADMIN_IDS:
         BOT.delete_message(chat_id, message.id)
         sleep(DEL_TIME)
+
         tarot_main(message)
         start_help(message, True)
     else:
-        if last_tarot_date == today:
+        if last_tarot_date == today.date():
             sent_message = BOT.send_message(
                 message.chat.id,
                 f'<u>{user_first_name}</u>, '
@@ -297,7 +297,6 @@ def tarot_start(message):
             sleep(DEL_TIME)
 
             tarot_main(message)
-
             start_help(message, True)
 
 
