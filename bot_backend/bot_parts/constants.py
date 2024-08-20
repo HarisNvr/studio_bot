@@ -11,9 +11,15 @@ An instance of the Telegram bot initialized with the bot token
 retrieved from environment variables.
 '''
 
-CHANNEL_ID = int(getenv('CHANNEL_ID'))
-
+INSTAGRAM = getenv('INSTAGRAM')
+VK = getenv('VK')
+TG_DM = getenv('TG_DM')
+TG_CHANNEL = getenv('TG_CHANNEL')
+WA = getenv('WA')
+YA_DISK = getenv('YA_DISK')
+SUPPORT = getenv('SUPPORT')
 ORG_NAME = getenv('ORG_NAME')
+CHANNEL_ID = int(getenv('CHANNEL_ID'))
 
 DEL_TIME = 0.5
 '''

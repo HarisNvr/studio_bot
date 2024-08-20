@@ -9,7 +9,7 @@ from bot_funcs.user_funcs import (
     clean, delete_user_messages, soc_profiles, start_help, tarot_start, chepuha
 )
 from bot_parts.constants import BOT
-from bot_parts.wrappers import check_bd_chat_id, check_is_admin
+from bot_parts.wrappers import check_bd_chat_id, check_is_admin, sub_check
 from sql_orm import (
     record_message_id_to_db, get_user_db_id, morning_routine
 )
@@ -32,8 +32,9 @@ def admin_commands(message):
 @BOT.message_handler(commands=['start', 'help', 'clean', 'studio', 'mk',
                                'shop', 'soc_profiles'])
 @check_bd_chat_id
+@sub_check
 def user_commands(message):
-    if message.text == ('/start' or '/help'):
+    if message.text in ['/start', '/help']:
         start_help(message)
     elif message.text == '/clean':
         clean(message)
