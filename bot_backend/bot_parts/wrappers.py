@@ -6,8 +6,9 @@ from telebot import types
 from telebot.apihelper import ApiTelegramException
 
 from bot_funcs.user_funcs import chepuha
-from bot_parts.constants import ADMIN_IDS, BOT, CHANNEL_ID, TG_CHANNEL, \
-    DEL_TIME
+from bot_parts.constants import (
+    ADMIN_IDS, BOT, CHANNEL_ID, TG_CHANNEL, DEL_TIME
+)
 from sql_orm import record_message_id_to_db, engine, User, get_user_db_id
 
 
@@ -116,6 +117,16 @@ def sub_check(function):
                 is_subscribed = False
         except ApiTelegramException:
             is_subscribed = False
+
+        with Session(engine) as session:
+            session.execute(
+                update(User).where(
+                    User.chat_id == chat_id
+                ).values(
+                    is_subscribed=is_subscribed
+                )
+            )
+            session.commit()
 
         if not is_subscribed and message.text == '/start':
             sent_message = BOT.send_message(

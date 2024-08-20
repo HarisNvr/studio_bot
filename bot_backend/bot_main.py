@@ -50,6 +50,7 @@ def user_commands(message):
 
 @BOT.message_handler(content_types=['text', 'photo'])
 @check_bd_chat_id
+@sub_check
 def message_input(message):
     chat_id = message.chat.id
     user_db_id = get_user_db_id(chat_id)
