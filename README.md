@@ -50,6 +50,7 @@ ENGINE_ECHO=True/False  # Вывод отладки БД в консоль
 #Alembic_Stuff
 MIGRATE=True/False  # Создание и применение миграций при запуске бота
 COMMIT_MESSAGE=Test!  # Название коммита миграций Алембика
+TZ=Europe/Moscow  # Тайм-зона, которая будет задана для БД
 
 #Soc_Profiles
 INSTAGRAM=https://instagram.com/yourprofile  # Ссылка на Instagram профиль
